@@ -176,7 +176,7 @@ enum KeyboardShortcutSettings {
             case .openBrowser:
                 return StoredShortcut(key: "l", command: true, shift: true, option: false, control: false)
             case .openDiffPanel:
-                return StoredShortcut(key: "d", command: true, shift: true, option: false, control: false)
+                return StoredShortcut(key: "g", command: true, shift: true, option: false, control: false)
             case .toggleBrowserDeveloperTools:
                 // Safari default: Show Web Inspector.
                 return StoredShortcut(key: "i", command: true, shift: false, option: true, control: false)
