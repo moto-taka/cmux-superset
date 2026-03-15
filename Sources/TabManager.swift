@@ -1041,6 +1041,55 @@ class TabManager: ObservableObject {
         return newWorkspace
     }
 
+    // MARK: - Worktree Workspace
+
+    /// Create a new workspace backed by a git worktree.
+    ///
+    /// This creates a new git worktree branch, then creates a workspace
+    /// whose working directory points to the worktree path.
+    ///
+    /// - Parameters:
+    ///   - repoPath: The root of the git repository to create the worktree in.
+    ///   - branchName: The name for the new branch.
+    ///   - baseBranch: The branch to base the new worktree on (defaults to the repo's default branch).
+    ///   - select: Whether to select the new workspace after creation.
+    /// - Returns: The new workspace, or `nil` if worktree creation failed.
+    @discardableResult
+    func addWorktreeWorkspace(
+        repoPath: String,
+        branchName: String,
+        baseBranch: String? = nil,
+        select: Bool = true
+    ) -> Workspace? {
+        let worktreeManager = WorktreeManager.shared
+
+        let result = worktreeManager.createWorktree(
+            repoPath: repoPath,
+            branchName: branchName,
+            baseBranch: baseBranch
+        )
+
+        switch result {
+        case .success(let worktreePath):
+            let workspace = addWorkspace(
+                workingDirectory: worktreePath,
+                select: select
+            )
+            workspace.worktreePath = worktreePath
+            workspace.worktreeRepoRoot = repoPath
+            workspace.customTitle = branchName
+#if DEBUG
+            dlog("worktree.created branch=\(branchName) path=\(worktreePath)")
+#endif
+            return workspace
+        case .failure(let error):
+#if DEBUG
+            dlog("worktree.createFailed error=\(error.localizedDescription)")
+#endif
+            return nil
+        }
+    }
+
     private func sendWelcomeWhenReady(to workspace: Workspace, attempt: Int = 0) {
         let maxAttempts = 60
         if let terminalPanel = workspace.focusedTerminalPanel,
@@ -1481,6 +1530,24 @@ class TabManager: ObservableObject {
         sentryBreadcrumb("workspace.close", data: ["tabCount": tabs.count - 1])
         clearInitialWorkspaceGitProbe(workspaceId: workspace.id)
         sidebarSelectedWorkspaceIds.remove(workspace.id)
+
+        // Clean up associated git worktree in the background.
+        // Capture the manager reference on the main actor before dispatching
+        // to a background queue, since WorktreeManager is @MainActor-isolated.
+        if let worktreePath = workspace.worktreePath,
+           let repoRoot = workspace.worktreeRepoRoot {
+#if DEBUG
+            dlog("worktree.cleanup path=\(worktreePath) repo=\(repoRoot)")
+#endif
+            let worktreeManager = WorktreeManager.shared
+            DispatchQueue.global(qos: .utility).async {
+                let _ = worktreeManager.removeWorktree(
+                    repoPath: repoRoot,
+                    worktreePath: worktreePath,
+                    force: false
+                )
+            }
+        }
 
         AppDelegate.shared?.notificationStore?.clearNotifications(forTabId: workspace.id)
         unwireClosedBrowserTracking(for: workspace)
@@ -2783,6 +2850,19 @@ class TabManager: ObservableObject {
     func newBrowserSurface(tabId: UUID, inPane paneId: PaneID, url: URL? = nil) -> UUID? {
         guard let tab = tabs.first(where: { $0.id == tabId }) else { return nil }
         return tab.newBrowserSurface(inPane: paneId, url: url)?.id
+    }
+
+    /// Open a diff panel in the focused pane of the selected workspace.
+    /// Uses the workspace's current working directory to find the git root.
+    @discardableResult
+    func openDiffPanel() -> DiffPanel? {
+        guard let workspace = selectedWorkspace,
+              let paneId = workspace.bonsplitController.focusedPaneId else { return nil }
+
+        let workingDir = workspace.currentDirectory
+        let repoPath = WorktreeManager.shared.findGitRoot(for: workingDir) ?? workingDir
+
+        return workspace.newDiffSurface(inPane: paneId, repoPath: repoPath, focus: true)
     }
 
     /// Get a browser panel by ID
@@ -4273,6 +4353,7 @@ extension Notification.Name {
     static let commandPaletteMoveSelection = Notification.Name("cmux.commandPaletteMoveSelection")
     static let commandPaletteRenameInputInteractionRequested = Notification.Name("cmux.commandPaletteRenameInputInteractionRequested")
     static let commandPaletteRenameInputDeleteBackwardRequested = Notification.Name("cmux.commandPaletteRenameInputDeleteBackwardRequested")
+    static let worktreeCreationRequested = Notification.Name("cmux.worktreeCreationRequested")
     static let feedbackComposerRequested = Notification.Name("cmux.feedbackComposerRequested")
     static let ghosttyDidSetTitle = Notification.Name("ghosttyDidSetTitle")
     static let ghosttyDidFocusTab = Notification.Name("ghosttyDidFocusTab")

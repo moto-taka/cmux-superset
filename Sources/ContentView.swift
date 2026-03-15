@@ -1357,6 +1357,7 @@ struct ContentView: View {
     @State private var commandPaletteVisibleResults: [CommandPaletteSearchResult] = []
     @State private var commandPaletteVisibleResultsScope: CommandPaletteListScope?
     @State private var commandPaletteVisibleResultsFingerprint: Int?
+    @State private var showWorktreeCreationSheet = false
     @State private var cachedCommandPaletteScope: CommandPaletteListScope?
     @State private var cachedCommandPaletteFingerprint: Int?
     @State private var commandPaletteSearchTask: Task<Void, Never>?
@@ -2046,7 +2047,7 @@ struct ContentView: View {
                     anchorView: fullscreenControlsViewModel.notificationsAnchorView
                 )
             },
-            onNewTab: { tabManager.addTab() }
+            onNewTab: { showWorktreeCreationSheet = true }
         )
     }
 
@@ -2561,6 +2562,10 @@ struct ContentView: View {
             _ = handleCommandPaletteRenameDeleteBackward(modifiers: [])
         })
 
+        view = AnyView(view.onReceive(NotificationCenter.default.publisher(for: .worktreeCreationRequested)) { _ in
+            showWorktreeCreationSheet = true
+        })
+
         view = AnyView(view.onReceive(NotificationCenter.default.publisher(for: .feedbackComposerRequested)) { notification in
             let requestedWindow = notification.object as? NSWindow
             guard Self.shouldHandleCommandPaletteRequest(
@@ -2645,6 +2650,22 @@ struct ContentView: View {
         view = AnyView(view.ignoresSafeArea())
         view = AnyView(view.sheet(isPresented: $isFeedbackComposerPresented) {
             SidebarFeedbackComposerSheet()
+        })
+
+        view = AnyView(view.sheet(isPresented: $showWorktreeCreationSheet) {
+            WorktreeCreationView(
+                initialDirectory: tabManager.selectedWorkspace?.currentDirectory,
+                onCreateWorktree: { repoPath, branchName, baseBranch in
+                    tabManager.addWorktreeWorkspace(
+                        repoPath: repoPath,
+                        branchName: branchName,
+                        baseBranch: baseBranch
+                    )
+                },
+                onOpenFolder: { path in
+                    tabManager.addWorkspace(workingDirectory: path)
+                }
+            )
         })
 
         view = AnyView(view.onDisappear {
@@ -2857,8 +2878,7 @@ struct ContentView: View {
     }
 
     private func addTab() {
-        tabManager.addTab()
-        sidebarSelectionState.selection = .tabs
+        showWorktreeCreationSheet = true
     }
 
     private func makeViewHierarchyTransparent(_ root: NSView) {
@@ -4433,6 +4453,8 @@ struct ContentView: View {
             return String(localized: "commandPalette.kind.browser", defaultValue: "Browser")
         case .markdown:
             return String(localized: "commandPalette.kind.markdown", defaultValue: "Markdown")
+        case .diff:
+            return String(localized: "commandPalette.kind.diff", defaultValue: "Diff")
         }
     }
 
@@ -4444,6 +4466,8 @@ struct ContentView: View {
             return ["browser", "web", "page"]
         case .markdown:
             return ["markdown", "note", "preview"]
+        case .diff:
+            return ["diff", "changes", "git"]
         }
     }
 
@@ -5350,12 +5374,31 @@ struct ContentView: View {
             )
         )
 
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.gitChanges",
+                title: constant(String(localized: "command.gitChanges.title", defaultValue: "Git Changes")),
+                subtitle: workspaceSubtitle,
+                keywords: ["git", "diff", "changes", "unstaged", "staged"]
+            )
+        )
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.newWorktree",
+                title: constant(String(localized: "command.newWorktree.title", defaultValue: "New Worktree Workspace")),
+                subtitle: constant(String(localized: "command.newWorktree.subtitle", defaultValue: "Workspace")),
+                keywords: ["worktree", "git", "branch", "create"]
+            )
+        )
+
         return contributions
     }
 
     private func registerCommandPaletteHandlers(_ registry: inout CommandPaletteHandlerRegistry) {
         registry.register(commandId: "palette.newWorkspace") {
-            tabManager.addWorkspace()
+            DispatchQueue.main.async {
+                showWorktreeCreationSheet = true
+            }
         }
         registry.register(commandId: "palette.openFolder") {
             // Defer so the command palette dismisses before the modal sheet appears.
@@ -5369,6 +5412,14 @@ struct ContentView: View {
                 if panel.runModal() == .OK, let url = panel.url {
                     tabManager.addWorkspace(workingDirectory: url.path)
                 }
+            }
+        }
+        registry.register(commandId: "palette.gitChanges") {
+            tabManager.openDiffPanel()
+        }
+        registry.register(commandId: "palette.newWorktree") {
+            DispatchQueue.main.async {
+                showWorktreeCreationSheet = true
             }
         }
         registry.register(commandId: "palette.newWindow") {
@@ -10310,6 +10361,23 @@ private struct TabItemView: View, Equatable {
                     .truncationMode(.tail)
 
                 Spacer()
+
+                HStack(spacing: 4) {
+                    // Git diff button
+                    Button(action: {
+                        tabManager.selectedTabId = tab.id
+                        tabManager.openDiffPanel()
+                    }) {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(activeSecondaryColor(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .safeHelp(String(localized: "sidebar.gitChanges.tooltip", defaultValue: "Git Changes"))
+                    .frame(width: 16, height: 16, alignment: .center)
+                    .opacity(isHovering && !showsWorkspaceShortcutHint ? 1 : 0)
+                    .allowsHitTesting(isHovering && !showsWorkspaceShortcutHint)
+                }
 
                 ZStack(alignment: .trailing) {
                     Button(action: {

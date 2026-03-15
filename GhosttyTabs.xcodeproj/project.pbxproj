@@ -99,6 +99,12 @@
 		DA7A10CA710E000000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = DA7A10CA710E000000000001 /* Localizable.xcstrings */; };
 		DA7A10CA710E000000000004 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = DA7A10CA710E000000000002 /* InfoPlist.xcstrings */; };
 		A5001623 /* cmux.sdef in Resources */ = {isa = PBXBuildFile; fileRef = A5001622 /* cmux.sdef */; };
+		A5001430 /* DiffPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001431 /* DiffPanel.swift */; };
+		A5001432 /* DiffPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001433 /* DiffPanelView.swift */; };
+		A5001434 /* WorktreeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001435 /* WorktreeManager.swift */; };
+		A5001436 /* WorktreeCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001437 /* WorktreeCreationView.swift */; };
+		A5001438 /* WorktreeDeleteConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001439 /* WorktreeDeleteConfirmation.swift */; };
+		A5001440 /* diff-viewer.html in Resources */ = {isa = PBXBuildFile; fileRef = A5001441 /* diff-viewer.html */; };
 			/* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -245,6 +251,12 @@
 					DA7A10CA710E000000000001 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		DA7A10CA710E000000000002 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		A5001622 /* cmux.sdef */ = {isa = PBXFileReference; lastKnownFileType = text.sdef; path = cmux.sdef; sourceTree = "<group>"; };
+		A5001431 /* DiffPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/DiffPanel.swift; sourceTree = "<group>"; };
+		A5001433 /* DiffPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/DiffPanelView.swift; sourceTree = "<group>"; };
+		A5001435 /* WorktreeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeManager.swift; sourceTree = "<group>"; };
+		A5001437 /* WorktreeCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeCreationView.swift; sourceTree = "<group>"; };
+		A5001439 /* WorktreeDeleteConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeDeleteConfirmation.swift; sourceTree = "<group>"; };
+		A5001441 /* diff-viewer.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = "diff-viewer.html"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -295,6 +307,7 @@
 				DA7A10CA710E000000000003 /* Localizable.xcstrings in Resources */,
 				DA7A10CA710E000000000004 /* InfoPlist.xcstrings in Resources */,
 				A5001623 /* cmux.sdef in Resources */,
+				A5001440 /* diff-viewer.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,7 +403,12 @@
 				A5001418 /* MarkdownPanel.swift */,
 				A5001419 /* MarkdownPanelView.swift */,
 				A5001510 /* CmuxWebView.swift */,
+				A5001431 /* DiffPanel.swift */,
+				A5001433 /* DiffPanelView.swift */,
 				A5001415 /* PanelContentView.swift */,
+				A5001435 /* WorktreeManager.swift */,
+				A5001437 /* WorktreeCreationView.swift */,
+				A5001439 /* WorktreeDeleteConfirmation.swift */,
 				A5001211 /* UpdateController.swift */,
 				A5001212 /* UpdateDelegate.swift */,
 				A5001213 /* UpdateDriver.swift */,
@@ -428,6 +446,7 @@
 				DA7A10CA710E000000000001 /* Localizable.xcstrings */,
 				DA7A10CA710E000000000002 /* InfoPlist.xcstrings */,
 				A5001622 /* cmux.sdef */,
+				A5001441 /* diff-viewer.html */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -679,6 +698,11 @@
 				A5001240 /* WindowDecorationsController.swift in Sources */,
 				A500120C /* WindowAccessor.swift in Sources */,
 				A5001610 /* SessionPersistence.swift in Sources */,
+				A5001430 /* DiffPanel.swift in Sources */,
+				A5001432 /* DiffPanelView.swift in Sources */,
+				A5001434 /* WorktreeManager.swift in Sources */,
+				A5001436 /* WorktreeCreationView.swift in Sources */,
+				A5001438 /* WorktreeDeleteConfirmation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

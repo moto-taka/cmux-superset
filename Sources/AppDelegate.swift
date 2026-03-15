@@ -8200,7 +8200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 #endif
             // Cmd+N semantics:
             // - If there are no main windows, create a new window.
-            // - Otherwise, create a new workspace in the active window.
+            // - Otherwise, show the worktree/workspace creation sheet.
             if mainWindowContexts.isEmpty {
                 #if DEBUG
                 logWorkspaceCreationRouting(
@@ -8212,17 +8212,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 )
                 #endif
                 openNewMainWindow(nil)
-            } else if addWorkspaceInPreferredMainWindow(event: event, debugSource: "shortcut.cmdN") == nil {
-                #if DEBUG
-                logWorkspaceCreationRouting(
-                    phase: "fallback_new_window",
-                    source: "shortcut.cmdN",
-                    reason: "workspace_creation_returned_nil",
-                    event: event,
-                    chosenContext: nil
-                )
-                #endif
-                openNewMainWindow(nil)
+            } else {
+                NotificationCenter.default.post(name: .worktreeCreationRequested, object: nil)
             }
             return true
         }

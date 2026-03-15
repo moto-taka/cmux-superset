@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Menlo, monospace;
+            font-size: 13px;
+            background: var(--bg);
+            color: var(--fg);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        :root {
+            --bg: #1e1e1e;
+            --fg: #d4d4d4;
+            --add-bg: rgba(35, 134, 54, 0.15);
+            --add-fg: #3fb950;
+            --del-bg: rgba(218, 54, 51, 0.12);
+            --del-fg: #f85149;
+            --line-num: #858585;
+            --header-bg: #2d2d2d;
+            --header-fg: #e1e4e8;
+            --border: #404040;
+            --hunk-bg: rgba(33, 136, 255, 0.1);
+            --empty-fg: #858585;
+            --gutter-bg: rgba(0,0,0,0.1);
+            --scrollbar-thumb: rgba(255,255,255,0.15);
+        }
+        .light {
+            --bg: #ffffff;
+            --fg: #24292e;
+            --add-bg: rgba(35, 134, 54, 0.1);
+            --add-fg: #22863a;
+            --del-bg: rgba(218, 54, 51, 0.08);
+            --del-fg: #cb2431;
+            --line-num: #959da5;
+            --header-bg: #f6f8fa;
+            --header-fg: #24292e;
+            --border: #e1e4e8;
+            --hunk-bg: rgba(33, 136, 255, 0.08);
+            --empty-fg: #959da5;
+            --gutter-bg: rgba(0,0,0,0.03);
+            --scrollbar-thumb: rgba(0,0,0,0.15);
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+        #diff-container { padding: 8px; }
+
+        .diff-file { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .diff-file:last-child { margin-bottom: 8px; }
+        .diff-file-header {
+            padding: 8px 12px; background: var(--header-bg); border-bottom: 1px solid var(--border);
+            font-weight: 600; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--header-fg); display: flex; align-items: center; gap: 6px;
+        }
+        .file-stats { margin-left: auto; font-weight: normal; font-size: 11px; opacity: 0.7; }
+        .stat-add { color: var(--add-fg); }
+        .stat-del { color: var(--del-fg); }
+
+        /* Side-by-side layout */
+        .split-diff { display: flex; width: 100%; overflow-x: auto; }
+        .split-side { flex: 1; min-width: 0; overflow-x: auto; }
+        .split-side.left { border-right: 1px solid var(--border); }
+        .split-side .side-label {
+            padding: 2px 8px; font-size: 10px; font-family: -apple-system, sans-serif;
+            color: var(--line-num); background: var(--gutter-bg); text-align: center;
+            border-bottom: 1px solid var(--border); font-weight: 600; letter-spacing: 0.5px;
+        }
+
+        .diff-table {
+            width: 100%; border-collapse: collapse;
+            font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 12px;
+            line-height: 20px; table-layout: fixed;
+        }
+        .diff-line { line-height: 20px; }
+        .diff-line-num {
+            width: 40px; min-width: 40px; max-width: 40px;
+            padding: 0 6px; text-align: right; color: var(--line-num);
+            user-select: none; -webkit-user-select: none; font-size: 11px;
+            background: var(--gutter-bg); border-right: 1px solid var(--border);
+        }
+        .diff-line-content {
+            padding: 0 8px; white-space: pre-wrap; word-break: break-all; overflow-wrap: break-word;
+        }
+        .diff-add { background: var(--add-bg); }
+        .diff-del { background: var(--del-bg); }
+        .diff-empty { background: var(--gutter-bg); opacity: 0.5; }
+        .diff-hunk { background: var(--hunk-bg); color: var(--line-num); }
+        .diff-hunk .diff-line-content { font-style: italic; }
+
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: calc(100vh - 16px); color: var(--empty-fg); gap: 8px;
+        }
+        .empty-title { font-size: 14px; font-family: -apple-system, sans-serif; font-weight: 500; }
+        .empty-subtitle { font-size: 12px; font-family: -apple-system, sans-serif; opacity: 0.7; }
+        .binary-notice {
+            padding: 12px 16px; color: var(--line-num); font-style: italic;
+            font-family: -apple-system, sans-serif; font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="diff-container">
+        <div class="empty-state"><div class="empty-title">No changes to display</div></div>
+    </div>
+    <script>
+        function parseDiff(diffText) {
+            if (!diffText || !diffText.trim()) return [];
+            var files = [], lines = diffText.split('\n');
+            var currentFile = null, oldLine = 0, newLine = 0, inHunk = false;
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (line.startsWith('diff --git')) {
+                    var m = line.match(/b\/(.+)$/);
+                    currentFile = { name: m ? m[1] : 'unknown', hunks: [], additions: 0, deletions: 0 };
+                    files.push(currentFile); inHunk = false;
+                } else if (line.startsWith('Binary files')) {
+                    if (currentFile) { currentFile.isBinary = true; currentFile.binaryMessage = line; }
+                } else if (line.startsWith('---') || line.startsWith('+++')) { continue;
+                } else if (line.startsWith('@@')) {
+                    var hm = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/);
+                    if (hm) { oldLine = parseInt(hm[1],10); newLine = parseInt(hm[2],10); inHunk = true;
+                        if (currentFile) currentFile.hunks.push({ type:'hunk', text: line }); }
+                } else if (inHunk && currentFile) {
+                    if (line.startsWith('+')) { currentFile.additions++;
+                        currentFile.hunks.push({ type:'add', oldNum:'', newNum: newLine++, text: line.substring(1) });
+                    } else if (line.startsWith('-')) { currentFile.deletions++;
+                        currentFile.hunks.push({ type:'del', oldNum: oldLine++, newNum:'', text: line.substring(1) });
+                    } else if (line.startsWith(' ')) {
+                        currentFile.hunks.push({ type:'context', oldNum: oldLine++, newNum: newLine++, text: line.substring(1) });
+                    } else if (line.startsWith('\\')) { continue; }
+                }
+            }
+            return files;
+        }
+
+        /* Convert unified hunks into paired left/right rows for side-by-side */
+        function pairHunks(hunks) {
+            var rows = [];
+            var i = 0;
+            while (i < hunks.length) {
+                var h = hunks[i];
+                if (h.type === 'hunk') {
+                    rows.push({ type:'hunk', text: h.text });
+                    i++;
+                } else if (h.type === 'context') {
+                    rows.push({ type:'context', left: h, right: h });
+                    i++;
+                } else {
+                    // Collect consecutive del then add for pairing
+                    var dels = [], adds = [];
+                    while (i < hunks.length && hunks[i].type === 'del') { dels.push(hunks[i]); i++; }
+                    while (i < hunks.length && hunks[i].type === 'add') { adds.push(hunks[i]); i++; }
+                    var max = Math.max(dels.length, adds.length);
+                    for (var j = 0; j < max; j++) {
+                        rows.push({
+                            type: 'change',
+                            left: j < dels.length ? dels[j] : null,
+                            right: j < adds.length ? adds[j] : null
+                        });
+                    }
+                }
+            }
+            return rows;
+        }
+
+        function renderDiff(files) {
+            var container = document.getElementById('diff-container');
+            while (container.firstChild) container.removeChild(container.firstChild);
+            if (!files.length) {
+                var ed = document.createElement('div'); ed.className = 'empty-state';
+                var t = document.createElement('div'); t.className = 'empty-title'; t.textContent = 'No changes';
+                var s = document.createElement('div'); s.className = 'empty-subtitle'; s.textContent = 'Working tree is clean';
+                ed.appendChild(t); ed.appendChild(s); container.appendChild(ed); return;
+            }
+            for (var f = 0; f < files.length; f++) {
+                var file = files[f];
+                var fileDiv = document.createElement('div'); fileDiv.className = 'diff-file';
+                // Header
+                var hdr = document.createElement('div'); hdr.className = 'diff-file-header';
+                var nm = document.createElement('span'); nm.textContent = file.name; hdr.appendChild(nm);
+                if (!file.isBinary) {
+                    var st = document.createElement('span'); st.className = 'file-stats';
+                    if (file.additions > 0) { var a = document.createElement('span'); a.className='stat-add'; a.textContent='+'+file.additions; st.appendChild(a); }
+                    if (file.additions > 0 && file.deletions > 0) st.appendChild(document.createTextNode(' '));
+                    if (file.deletions > 0) { var d = document.createElement('span'); d.className='stat-del'; d.textContent='-'+file.deletions; st.appendChild(d); }
+                    hdr.appendChild(st);
+                }
+                fileDiv.appendChild(hdr);
+                if (file.isBinary) {
+                    var bn = document.createElement('div'); bn.className='binary-notice'; bn.textContent = file.binaryMessage || 'Binary file changed';
+                    fileDiv.appendChild(bn);
+                } else {
+                    var paired = pairHunks(file.hunks);
+                    var wrap = document.createElement('div'); wrap.className = 'split-diff';
+                    // Left side (old)
+                    var leftDiv = document.createElement('div'); leftDiv.className = 'split-side left';
+                    var leftLabel = document.createElement('div'); leftLabel.className = 'side-label'; leftLabel.textContent = 'Old'; leftDiv.appendChild(leftLabel);
+                    var leftTable = document.createElement('table'); leftTable.className = 'diff-table';
+                    // Right side (new)
+                    var rightDiv = document.createElement('div'); rightDiv.className = 'split-side right';
+                    var rightLabel = document.createElement('div'); rightLabel.className = 'side-label'; rightLabel.textContent = 'New'; rightDiv.appendChild(rightLabel);
+                    var rightTable = document.createElement('table'); rightTable.className = 'diff-table';
+
+                    for (var r = 0; r < paired.length; r++) {
+                        var row = paired[r];
+                        if (row.type === 'hunk') {
+                            // Hunk header spans both sides
+                            var ltr = document.createElement('tr'); ltr.className = 'diff-line diff-hunk';
+                            var ltd1 = document.createElement('td'); ltd1.className = 'diff-line-num'; ltr.appendChild(ltd1);
+                            var ltd2 = document.createElement('td'); ltd2.className = 'diff-line-content'; ltd2.textContent = row.text; ltr.appendChild(ltd2);
+                            leftTable.appendChild(ltr);
+                            var rtr = document.createElement('tr'); rtr.className = 'diff-line diff-hunk';
+                            var rtd1 = document.createElement('td'); rtd1.className = 'diff-line-num'; rtr.appendChild(rtd1);
+                            var rtd2 = document.createElement('td'); rtd2.className = 'diff-line-content'; rtd2.textContent = row.text; rtr.appendChild(rtd2);
+                            rightTable.appendChild(rtr);
+                        } else if (row.type === 'context') {
+                            addSideLine(leftTable, row.left.oldNum, row.left.text, '');
+                            addSideLine(rightTable, row.right.newNum, row.right.text, '');
+                        } else {
+                            // change: del on left, add on right
+                            if (row.left) { addSideLine(leftTable, row.left.oldNum, row.left.text, 'diff-del'); }
+                            else { addSideLine(leftTable, '', '', 'diff-empty'); }
+                            if (row.right) { addSideLine(rightTable, row.right.newNum, row.right.text, 'diff-add'); }
+                            else { addSideLine(rightTable, '', '', 'diff-empty'); }
+                        }
+                    }
+                    leftDiv.appendChild(leftTable); rightDiv.appendChild(rightTable);
+                    wrap.appendChild(leftDiv); wrap.appendChild(rightDiv);
+                    fileDiv.appendChild(wrap);
+                }
+                container.appendChild(fileDiv);
+            }
+        }
+
+        function addSideLine(table, num, text, cls) {
+            var tr = document.createElement('tr'); tr.className = 'diff-line';
+            if (cls) tr.classList.add(cls);
+            var tdNum = document.createElement('td'); tdNum.className = 'diff-line-num';
+            tdNum.textContent = num !== '' ? String(num) : '';
+            tr.appendChild(tdNum);
+            var tdContent = document.createElement('td'); tdContent.className = 'diff-line-content';
+            tdContent.textContent = text;
+            tr.appendChild(tdContent);
+            table.appendChild(tr);
+        }
+
+        function updateDiff(diffText) {
+            var files = parseDiff(diffText);
+            renderDiff(files);
+            window.scrollTo(0, 0);
+        }
+
+        function setTheme(isDark) { document.body.className = isDark ? '' : 'light'; }
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            document.body.className = 'light';
+        }
+    </script>
+</body>
+</html>
