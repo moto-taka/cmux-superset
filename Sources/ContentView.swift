@@ -9719,40 +9719,25 @@ struct VerticalTabsSidebar: View {
             )))
         }
 
-        // Always show repo group headers when there are grouped workspaces.
-        let showHeaders = !repoOrder.isEmpty
-
         for repoRoot in repoOrder {
             guard let workspaces = repoWorkspaces[repoRoot] else { continue }
 
-            if showHeaders {
-                let isExpanded = !collapsedRepoGroups.contains(repoRoot)
-                let repoName = (repoRoot as NSString).lastPathComponent
-                items.append(.repoHeader(SidebarRepoHeaderData(
-                    repoRoot: repoRoot,
-                    repoName: repoName,
-                    workspaceCount: workspaces.count,
-                    isExpanded: isExpanded
-                )))
+            let isExpanded = !collapsedRepoGroups.contains(repoRoot)
+            let repoName = (repoRoot as NSString).lastPathComponent
+            items.append(.repoHeader(SidebarRepoHeaderData(
+                repoRoot: repoRoot,
+                repoName: repoName,
+                workspaceCount: workspaces.count,
+                isExpanded: isExpanded
+            )))
 
-                if isExpanded {
-                    for tab in workspaces {
-                        let index = globalIndexByWorkspaceId[tab.id] ?? 0
-                        items.append(.workspace(SidebarWorkspaceItemData(
-                            workspace: tab,
-                            globalIndex: index,
-                            isGrouped: true
-                        )))
-                    }
-                }
-            } else {
-                // Single repo, no ungrouped — show workspaces without header.
+            if isExpanded {
                 for tab in workspaces {
                     let index = globalIndexByWorkspaceId[tab.id] ?? 0
                     items.append(.workspace(SidebarWorkspaceItemData(
                         workspace: tab,
                         globalIndex: index,
-                        isGrouped: false
+                        isGrouped: true
                     )))
                 }
             }

@@ -4014,8 +4014,11 @@ class TabManager: ObservableObject {
             )
         }
 
-        // Detect git repo root if not yet set (needed for sidebar repo grouping).
-        if tab.gitRepoRoot == nil {
+        // Re-detect git repo root when the directory may have changed repos.
+        // Skip re-detection if the directory is still under the current git repo root.
+        if let currentRoot = tab.gitRepoRoot, normalized.hasPrefix(currentRoot) {
+            // Still in the same repo, no need to re-detect.
+        } else {
             detectGitRepoRoot(for: tab, directory: normalized)
         }
     }
@@ -4075,20 +4078,25 @@ class TabManager: ObservableObject {
                 directory: directory,
                 arguments: ["rev-parse", "--path-format=absolute", "--git-common-dir"]
             )?.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let gitCommonDir, !gitCommonDir.isEmpty else { return }
-
-            // --git-common-dir returns the main repo's .git directory.
-            // Its parent is the repository root.
-            let url = URL(fileURLWithPath: gitCommonDir)
-            let repoRoot = url.lastPathComponent == ".git"
-                ? url.deletingLastPathComponent().path
-                : url.deletingLastPathComponent().path
+            let newRoot: String?
+            if let gitCommonDir, !gitCommonDir.isEmpty {
+                // --git-common-dir returns the main repo's .git directory.
+                // Its parent is the repository root.
+                let url = URL(fileURLWithPath: gitCommonDir)
+                newRoot = url.lastPathComponent == ".git"
+                    ? url.deletingLastPathComponent().path
+                    : url.deletingLastPathComponent().path
+            } else {
+                // Directory is not inside a git repository.
+                newRoot = nil
+            }
 
             Task { @MainActor [weak self] in
                 guard let self,
-                      let workspace = self.tabs.first(where: { $0.id == workspaceId }),
-                      workspace.gitRepoRoot == nil else { return }
-                workspace.gitRepoRoot = repoRoot
+                      let workspace = self.tabs.first(where: { $0.id == workspaceId }) else { return }
+                // Only update if the repo root actually changed.
+                guard workspace.gitRepoRoot != newRoot else { return }
+                workspace.gitRepoRoot = newRoot
                 self.objectWillChange.send()
             }
         }
