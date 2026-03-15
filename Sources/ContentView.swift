@@ -3549,7 +3549,8 @@ struct ContentView: View {
 
         view = AnyView(view.sheet(isPresented: $showWorktreeCreationSheet) {
             WorktreeCreationView(
-                initialDirectory: tabManager.selectedWorkspace?.currentDirectory,
+                initialDirectory: tabManager.selectedWorkspace?.gitRepoRoot
+                    ?? tabManager.selectedWorkspace?.currentDirectory,
                 onCreateWorktree: { repoPath, branchName, baseBranch in
                     tabManager.addWorktreeWorkspace(
                         repoPath: repoPath,
@@ -9718,9 +9719,8 @@ struct VerticalTabsSidebar: View {
             )))
         }
 
-        // Repo groups — only show header when there are multiple repos or
-        // when there are both grouped and ungrouped workspaces.
-        let showHeaders = repoOrder.count > 1 || (!repoOrder.isEmpty && !ungrouped.isEmpty)
+        // Always show repo group headers when there are grouped workspaces.
+        let showHeaders = !repoOrder.isEmpty
 
         for repoRoot in repoOrder {
             guard let workspaces = repoWorkspaces[repoRoot] else { continue }

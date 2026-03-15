@@ -2217,6 +2217,9 @@ class TabManager: ObservableObject {
             workspace.worktreePath = worktreePath
             workspace.worktreeRepoRoot = repoPath
             workspace.gitRepoRoot = repoPath
+            // Notify sidebar to re-evaluate repo grouping since gitRepoRoot
+            // was set after addWorkspace() already published the tabs change.
+            objectWillChange.send()
             // Set initial title to branch name without using customTitle,
             // so that applyProcessTitle() can still detect Claude/Codex.
             workspace.applyProcessTitle(branchName)
@@ -2469,6 +2472,7 @@ class TabManager: ObservableObject {
         // Update git repo root if detected and not already set (e.g. by worktree creation).
         if let gitRoot = snapshot.gitRoot, !gitRoot.isEmpty, workspace.gitRepoRoot != gitRoot {
             workspace.gitRepoRoot = gitRoot
+            objectWillChange.send()
         }
 
         let resolvedPullRequest: SidebarPullRequestState? = {
@@ -2558,15 +2562,18 @@ class TabManager: ObservableObject {
     private nonisolated static func initialWorkspaceGitMetadataSnapshot(
         for directory: String
     ) async -> InitialWorkspaceGitMetadataSnapshot {
-        let gitRootOutput = await runGitCommand(directory: directory, arguments: ["rev-parse", "--git-common-dir"])
-        let gitRoot: String? = gitRootOutput
-            .flatMap { rawCommonDir -> String? in
-                let trimmed = rawCommonDir.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return nil }
-                let url = URL(fileURLWithPath: trimmed, isDirectory: true)
-                let resolved = url.lastPathComponent == ".git" ? url.deletingLastPathComponent() : url
-                return resolved.path
-            }
+        // --git-common-dir resolves the main repo's .git directory even from inside a worktree,
+        // so the parent of that directory is the canonical main repo root. --show-toplevel
+        // would return the worktree root instead.
+        let gitRootOutput = await runGitCommand(
+            directory: directory,
+            arguments: ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+        )
+        let gitRoot: String? = gitRootOutput.flatMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            return URL(fileURLWithPath: trimmed).deletingLastPathComponent().path
+        }
         let branchOutput = await runGitCommand(directory: directory, arguments: ["branch", "--show-current"])
         let branch = normalizedBranchName(branchOutput)
         guard let branch else {
@@ -4006,6 +4013,11 @@ class TabManager: ObservableObject {
                 reason: "directoryChange"
             )
         }
+
+        // Detect git repo root if not yet set (needed for sidebar repo grouping).
+        if tab.gitRepoRoot == nil {
+            detectGitRepoRoot(for: tab, directory: normalized)
+        }
     }
 
     func updateSurfaceGitBranch(
@@ -4050,6 +4062,36 @@ class TabManager: ObservableObject {
             panelId: surfaceId,
             reason: "branchCleared"
         )
+    }
+
+    /// Detect the git repository root for a workspace in the background.
+    ///
+    /// Uses `--git-common-dir` instead of `--show-toplevel` so that worktree
+    /// directories correctly resolve to the main repository root.
+    private func detectGitRepoRoot(for workspace: Workspace, directory: String) {
+        let workspaceId = workspace.id
+        DispatchQueue.global(qos: .utility).async {
+            let gitCommonDir = Self.runGitCommand(
+                directory: directory,
+                arguments: ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+            )?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let gitCommonDir, !gitCommonDir.isEmpty else { return }
+
+            // --git-common-dir returns the main repo's .git directory.
+            // Its parent is the repository root.
+            let url = URL(fileURLWithPath: gitCommonDir)
+            let repoRoot = url.lastPathComponent == ".git"
+                ? url.deletingLastPathComponent().path
+                : url.deletingLastPathComponent().path
+
+            Task { @MainActor [weak self] in
+                guard let self,
+                      let workspace = self.tabs.first(where: { $0.id == workspaceId }),
+                      workspace.gitRepoRoot == nil else { return }
+                workspace.gitRepoRoot = repoRoot
+                self.objectWillChange.send()
+            }
+        }
     }
 
     func updateSurfaceShellActivity(
