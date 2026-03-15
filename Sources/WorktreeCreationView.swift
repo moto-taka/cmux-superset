@@ -165,30 +165,20 @@ struct WorktreeCreationView: View {
             return
         }
 
-        // Run git rev-parse on a background thread to avoid blocking the UI.
+        // Validate and canonicalize to the main repo root on a background thread.
+        // Using findMainRepoRoot (--git-common-dir) instead of --show-toplevel
+        // prevents nested worktree creation when the user types a worktree path.
         DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = ["rev-parse", "--show-toplevel"]
-            process.currentDirectoryURL = URL(fileURLWithPath: path)
-            process.standardOutput = Pipe()
-            process.standardError = FileHandle.nullDevice
-
-            do {
-                try process.run()
-                process.waitUntilExit()
-                let valid = process.terminationStatus == 0
-
-                DispatchQueue.main.async {
-                    isValidRepo = valid
-                    if valid {
-                        detectBranches(path)
-                    } else {
-                        detectedBranches = []
+            let mainRoot = Self.findMainRepoRoot(from: path)
+            DispatchQueue.main.async {
+                if let mainRoot {
+                    isValidRepo = true
+                    // Canonicalize to main repo root to prevent nested worktrees
+                    if repoPath != mainRoot {
+                        repoPath = mainRoot
                     }
-                }
-            } catch {
-                DispatchQueue.main.async {
+                    detectBranches(mainRoot)
+                } else {
                     isValidRepo = false
                     detectedBranches = []
                 }
