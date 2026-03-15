@@ -177,6 +177,9 @@
 		FE003101 /* SessionIndexStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE003001 /* SessionIndexStore.swift */; };
 		FE003102 /* SessionIndexView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE003002 /* SessionIndexView.swift */; };
 		FE003103 /* RightSidebarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE003003 /* RightSidebarPanelView.swift */; };
+		B7A0001000000000000000B0 /* WorktreeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A0001000000000000000B1 /* WorktreeManager.swift */; };
+		B7A0002000000000000000B0 /* WorktreeCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A0002000000000000000B1 /* WorktreeCreationView.swift */; };
+		B7A0003000000000000000B0 /* WorktreeDeleteConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A0003000000000000000B1 /* WorktreeDeleteConfirmation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -414,6 +417,9 @@
 		FE003001 /* SessionIndexStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIndexStore.swift; sourceTree = "<group>"; };
 		FE003002 /* SessionIndexView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionIndexView.swift; sourceTree = "<group>"; };
 		FE003003 /* RightSidebarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightSidebarPanelView.swift; sourceTree = "<group>"; };
+		B7A0001000000000000000B1 /* WorktreeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeManager.swift; sourceTree = "<group>"; };
+		B7A0002000000000000000B1 /* WorktreeCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeCreationView.swift; sourceTree = "<group>"; };
+		B7A0003000000000000000B1 /* WorktreeDeleteConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeDeleteConfirmation.swift; sourceTree = "<group>"; };
 		IC000002 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -636,6 +642,9 @@
 				FE003001 /* SessionIndexStore.swift */,
 				FE003002 /* SessionIndexView.swift */,
 				FE003003 /* RightSidebarPanelView.swift */,
+				B7A0001000000000000000B1 /* WorktreeManager.swift */,
+				B7A0002000000000000000B1 /* WorktreeCreationView.swift */,
+				B7A0003000000000000000B1 /* WorktreeDeleteConfirmation.swift */,
 				105D8421DF4E2E09D255D785 /* Auth */,
 				FEED0000000000000000F003 /* Feed */,
 			);
@@ -1019,6 +1028,9 @@
 				FE003101 /* SessionIndexStore.swift in Sources */,
 				FE003102 /* SessionIndexView.swift in Sources */,
 				FE003103 /* RightSidebarPanelView.swift in Sources */,
+				B7A0001000000000000000B0 /* WorktreeManager.swift in Sources */,
+				B7A0002000000000000000B0 /* WorktreeCreationView.swift in Sources */,
+				B7A0003000000000000000B0 /* WorktreeDeleteConfirmation.swift in Sources */,
 				FEED0000000000000000F002 /* FeedCoordinator.swift in Sources */,
 				FEED0000000000000000F005 /* FeedPanelView.swift in Sources */,
 				FEED0000000000000000F00B /* FeedPreviewWindowController.swift in Sources */,

@@ -774,6 +774,9 @@ extension Workspace {
             }
             applySessionPanelMetadata(snapshot, toPanelId: markdownPanel.id)
             return markdownPanel.id
+        case .diff:
+            // Diff panels are transient and not restored from session.
+            return nil
         }
     }
 
@@ -6649,6 +6652,15 @@ final class Workspace: Identifiable, ObservableObject {
     @Published private(set) var surfaceTabBarDirectory: String?
     private(set) var preferredBrowserProfileID: UUID?
 
+    /// Path to the git worktree associated with this workspace, if any.
+    @Published var worktreePath: String?
+
+    /// The git repository root this workspace's worktree belongs to.
+    @Published var worktreeRepoRoot: String?
+
+    /// Whether this workspace was created as a worktree workspace.
+    var isWorktreeWorkspace: Bool { worktreePath != nil }
+
     /// Ordinal for CMUX_PORT range assignment (monotonically increasing per app session)
     var portOrdinal: Int = 0
 
@@ -7029,7 +7041,9 @@ final class Workspace: Identifiable, ObservableObject {
         configTemplate: CmuxSurfaceConfigTemplate? = nil,
         initialTerminalCommand: String? = nil,
         initialTerminalInput: String? = nil,
-        initialTerminalEnvironment: [String: String] = [:]
+        initialTerminalEnvironment: [String: String] = [:],
+        worktreePath: String? = nil,
+        worktreeRepoRoot: String? = nil
     ) {
         self.id = UUID()
         self.portOrdinal = portOrdinal
@@ -7037,6 +7051,8 @@ final class Workspace: Identifiable, ObservableObject {
         self.title = title
         self.customTitle = nil
         self.customDescription = nil
+        self.worktreePath = worktreePath
+        self.worktreeRepoRoot = worktreeRepoRoot
 
         let trimmedWorkingDirectory = workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let hasWorkingDirectory = !trimmedWorkingDirectory.isEmpty
@@ -7504,6 +7520,8 @@ final class Workspace: Identifiable, ObservableObject {
             return SurfaceKind.browser
         case .markdown:
             return SurfaceKind.markdown
+        case .diff:
+            return "diff"
         }
     }
 
@@ -9600,6 +9618,105 @@ final class Workspace: Identifiable, ObservableObject {
 
         installMarkdownPanelSubscription(markdownPanel)
         return markdownPanel
+    }
+
+    /// Create a new diff surface (tab) in the specified pane.
+    @discardableResult
+    func newDiffSurface(
+        inPane paneId: PaneID,
+        repoPath: String,
+        focus: Bool? = nil
+    ) -> DiffPanel? {
+        let shouldFocusNewTab = focus ?? (bonsplitController.focusedPaneId == paneId)
+
+        let diffPanel = DiffPanel(workspaceId: id, repoPath: repoPath)
+        panels[diffPanel.id] = diffPanel
+        panelTitles[diffPanel.id] = diffPanel.displayTitle
+
+        guard let newTabId = bonsplitController.createTab(
+            title: diffPanel.displayTitle,
+            icon: diffPanel.displayIcon,
+            kind: "diff",
+            isDirty: diffPanel.isDirty,
+            isLoading: false,
+            isPinned: false,
+            inPane: paneId
+        ) else {
+            panels.removeValue(forKey: diffPanel.id)
+            panelTitles.removeValue(forKey: diffPanel.id)
+            return nil
+        }
+
+        surfaceIdToPanelId[newTabId] = diffPanel.id
+
+        if shouldFocusNewTab {
+            bonsplitController.focusPane(paneId)
+            bonsplitController.selectTab(newTabId)
+            applyTabSelection(tabId: newTabId, inPane: paneId)
+        }
+
+        return diffPanel
+    }
+
+    /// Create a new diff panel as a split from the currently focused panel.
+    @discardableResult
+    func newDiffSplit(
+        from panelId: UUID,
+        orientation: SplitOrientation,
+        repoPath: String,
+        focus: Bool = true
+    ) -> DiffPanel? {
+        guard let sourceTabId = surfaceIdFromPanelId(panelId) else { return nil }
+        var sourcePaneId: PaneID?
+        for paneId in bonsplitController.allPaneIds {
+            let tabs = bonsplitController.tabs(inPane: paneId)
+            if tabs.contains(where: { $0.id == sourceTabId }) {
+                sourcePaneId = paneId
+                break
+            }
+        }
+        guard let paneId = sourcePaneId else { return nil }
+
+        let diffPanel = DiffPanel(workspaceId: id, repoPath: repoPath)
+        panels[diffPanel.id] = diffPanel
+        panelTitles[diffPanel.id] = diffPanel.displayTitle
+
+        let newTab = Bonsplit.Tab(
+            title: diffPanel.displayTitle,
+            icon: diffPanel.displayIcon,
+            kind: "diff",
+            isDirty: diffPanel.isDirty,
+            isLoading: false,
+            isPinned: false
+        )
+        surfaceIdToPanelId[newTab.id] = diffPanel.id
+        let previousFocusedPanelId = focusedPanelId
+
+        isProgrammaticSplit = true
+        defer { isProgrammaticSplit = false }
+        guard bonsplitController.splitPane(paneId, orientation: orientation, withTab: newTab, insertFirst: false) != nil else {
+            surfaceIdToPanelId.removeValue(forKey: newTab.id)
+            panels.removeValue(forKey: diffPanel.id)
+            panelTitles.removeValue(forKey: diffPanel.id)
+            return nil
+        }
+
+        let previousHostedView = focusedTerminalPanel?.hostedView
+        if focus {
+            previousHostedView?.suppressReparentFocus()
+            focusPanel(diffPanel.id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                previousHostedView?.clearSuppressReparentFocus()
+            }
+        } else {
+            preserveFocusAfterNonFocusSplit(
+                preferredPanelId: previousFocusedPanelId,
+                splitPanelId: diffPanel.id,
+                previousHostedView: previousHostedView
+            )
+        }
+
+        return diffPanel
     }
 
     /// Tear down all panels in this workspace, freeing their Ghostty surfaces.

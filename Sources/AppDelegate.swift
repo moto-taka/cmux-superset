@@ -10238,7 +10238,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 #if DEBUG
             cmuxDebugLog("shortcut.action name=newWorkspace \(debugShortcutRouteSnapshot(event: event))")
 #endif
-            performNewWorkspaceAction(event: event, debugSource: "shortcut.cmdN")
+            // Cmd+N semantics:
+            // - If there are no main windows, create a new window.
+            // - Otherwise, show the worktree/workspace creation sheet.
+            if mainWindowContexts.isEmpty {
+                #if DEBUG
+                logWorkspaceCreationRouting(
+                    phase: "fallback_new_window",
+                    source: "shortcut.cmdN",
+                    reason: "no_main_windows",
+                    event: event,
+                    chosenContext: nil
+                )
+                #endif
+                openNewMainWindow(nil)
+            } else {
+                NotificationCenter.default.post(name: .worktreeCreationRequested, object: nil)
+            }
             return true
         }
 
