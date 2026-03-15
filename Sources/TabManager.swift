@@ -1079,6 +1079,9 @@ class TabManager: ObservableObject {
             workspace.worktreePath = worktreePath
             workspace.worktreeRepoRoot = repoPath
             workspace.gitRepoRoot = repoPath
+            // Notify sidebar to re-evaluate repo grouping since gitRepoRoot
+            // was set after addWorkspace() already published the tabs change.
+            objectWillChange.send()
             // Set initial title to branch name without using customTitle,
             // so that applyProcessTitle() can still detect Claude/Codex.
             workspace.applyProcessTitle(branchName)
@@ -1213,6 +1216,7 @@ class TabManager: ObservableObject {
         // Update git repo root if detected and not already set (e.g. by worktree creation).
         if let gitRoot = snapshot.gitRoot, !gitRoot.isEmpty, workspace.gitRepoRoot != gitRoot {
             workspace.gitRepoRoot = gitRoot
+            objectWillChange.send()
         }
 
         let previousBranch = Self.normalizedBranchName(workspace.panelGitBranches[panelId]?.branch)
@@ -1239,8 +1243,18 @@ class TabManager: ObservableObject {
     private nonisolated static func initialWorkspaceGitMetadataSnapshot(
         for directory: String
     ) -> InitialWorkspaceGitMetadataSnapshot {
-        let gitRoot = runGitCommand(directory: directory, arguments: ["rev-parse", "--show-toplevel"])?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Use --git-common-dir to find the main repo root, even from inside worktrees.
+        let gitRoot: String? = {
+            guard let gitCommonDir = runGitCommand(
+                directory: directory,
+                arguments: ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+            )?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !gitCommonDir.isEmpty else { return nil }
+            let url = URL(fileURLWithPath: gitCommonDir)
+            return url.lastPathComponent == ".git"
+                ? url.deletingLastPathComponent().path
+                : url.deletingLastPathComponent().path
+        }()
 
         let branch = normalizedBranchName(runGitCommand(directory: directory, arguments: ["branch", "--show-current"]))
         guard let branch else {
@@ -1514,6 +1528,41 @@ class TabManager: ObservableObject {
         guard let tab = tabs.first(where: { $0.id == tabId }) else { return }
         let normalized = normalizeDirectory(directory)
         tab.updatePanelDirectory(panelId: surfaceId, directory: normalized)
+
+        // Detect git repo root if not yet set (needed for sidebar repo grouping).
+        if tab.gitRepoRoot == nil {
+            detectGitRepoRoot(for: tab, directory: normalized)
+        }
+    }
+
+    /// Detect the git repository root for a workspace in the background.
+    ///
+    /// Uses `--git-common-dir` instead of `--show-toplevel` so that worktree
+    /// directories correctly resolve to the main repository root.
+    private func detectGitRepoRoot(for workspace: Workspace, directory: String) {
+        let workspaceId = workspace.id
+        DispatchQueue.global(qos: .utility).async {
+            let gitCommonDir = Self.runGitCommand(
+                directory: directory,
+                arguments: ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+            )?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let gitCommonDir, !gitCommonDir.isEmpty else { return }
+
+            // --git-common-dir returns the main repo's .git directory.
+            // Its parent is the repository root.
+            let url = URL(fileURLWithPath: gitCommonDir)
+            let repoRoot = url.lastPathComponent == ".git"
+                ? url.deletingLastPathComponent().path
+                : url.deletingLastPathComponent().path
+
+            Task { @MainActor [weak self] in
+                guard let self,
+                      let workspace = self.tabs.first(where: { $0.id == workspaceId }),
+                      workspace.gitRepoRoot == nil else { return }
+                workspace.gitRepoRoot = repoRoot
+                self.objectWillChange.send()
+            }
+        }
     }
 
     func updateSurfaceShellActivity(

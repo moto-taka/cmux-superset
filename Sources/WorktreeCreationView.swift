@@ -128,27 +128,16 @@ struct WorktreeCreationView: View {
         .onAppear {
             loadRecentRepos()
             if let dir = initialDirectory, !dir.isEmpty, dir != NSHomeDirectory() {
-                // Auto-detect git root from current workspace directory
+                // Auto-detect the main git repo root from current workspace directory.
+                // Use --git-common-dir instead of --show-toplevel because --show-toplevel
+                // returns the worktree root (not the main repo) when run inside a worktree.
                 DispatchQueue.global(qos: .userInitiated).async {
-                    let process = Process()
-                    process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-                    process.arguments = ["rev-parse", "--show-toplevel"]
-                    process.currentDirectoryURL = URL(fileURLWithPath: dir)
-                    let pipe = Pipe()
-                    process.standardOutput = pipe
-                    process.standardError = FileHandle.nullDevice
-                    do {
-                        try process.run()
-                        process.waitUntilExit()
-                        if process.terminationStatus == 0 {
-                            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                            if let root = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !root.isEmpty {
-                                DispatchQueue.main.async {
-                                    repoPath = root
-                                }
-                            }
+                    let root = Self.findMainRepoRoot(from: dir)
+                    if let root, !root.isEmpty {
+                        DispatchQueue.main.async {
+                            repoPath = root
                         }
-                    } catch {}
+                    }
                 }
             }
         }
@@ -244,5 +233,42 @@ struct WorktreeCreationView: View {
 
     private func loadRecentRepos() {
         recentRepos = UserDefaults.standard.stringArray(forKey: "cmux.recentRepos") ?? []
+    }
+
+    /// Resolve the main repository root, even when called from inside a worktree.
+    ///
+    /// `git rev-parse --show-toplevel` returns the worktree root when run inside a
+    /// worktree, which leads to nested worktree creation. Instead, use
+    /// `--git-common-dir` which always points to the main repository's `.git`
+    /// directory; its parent is the true repo root.
+    private static func findMainRepoRoot(from directory: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+        process.currentDirectoryURL = URL(fileURLWithPath: directory)
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let gitCommonDir = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !gitCommonDir.isEmpty else { return nil }
+
+            // --git-common-dir returns the path to the main repo's .git directory.
+            // The parent of .git is the repository root.
+            let url = URL(fileURLWithPath: gitCommonDir)
+            if url.lastPathComponent == ".git" {
+                return url.deletingLastPathComponent().path
+            }
+            // Fallback: if the structure is unexpected, use the directory's parent.
+            return url.deletingLastPathComponent().path
+        } catch {
+            return nil
+        }
     }
 }

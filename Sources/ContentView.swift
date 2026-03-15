@@ -2654,7 +2654,8 @@ struct ContentView: View {
 
         view = AnyView(view.sheet(isPresented: $showWorktreeCreationSheet) {
             WorktreeCreationView(
-                initialDirectory: tabManager.selectedWorkspace?.currentDirectory,
+                initialDirectory: tabManager.selectedWorkspace?.gitRepoRoot
+                    ?? tabManager.selectedWorkspace?.currentDirectory,
                 onCreateWorktree: { repoPath, branchName, baseBranch in
                     tabManager.addWorktreeWorkspace(
                         repoPath: repoPath,
@@ -7847,56 +7848,58 @@ struct VerticalTabsSidebar: View {
                                 collapsedRepoGroups: collapsedRepoGroups
                             )
                             ForEach(sidebarItems) { item in
-                                switch item {
-                                case .repoHeader(let header):
-                                    SidebarRepoGroupHeaderView(
-                                        repoName: header.repoName,
-                                        workspaceCount: header.workspaceCount,
-                                        isExpanded: header.isExpanded,
-                                        onToggle: {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                if collapsedRepoGroups.contains(header.repoRoot) {
-                                                    collapsedRepoGroups.remove(header.repoRoot)
-                                                } else {
-                                                    collapsedRepoGroups.insert(header.repoRoot)
+                                Group {
+                                    switch item {
+                                    case .repoHeader(let header):
+                                        SidebarRepoGroupHeaderView(
+                                            repoName: header.repoName,
+                                            workspaceCount: header.workspaceCount,
+                                            isExpanded: header.isExpanded,
+                                            onToggle: {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    if collapsedRepoGroups.contains(header.repoRoot) {
+                                                        collapsedRepoGroups.remove(header.repoRoot)
+                                                    } else {
+                                                        collapsedRepoGroups.insert(header.repoRoot)
+                                                    }
                                                 }
                                             }
-                                        }
-                                    )
-                                case .workspace(let data):
-                                    TabItemView(
-                                        tabManager: tabManager,
-                                        notificationStore: notificationStore,
-                                        tab: data.workspace,
-                                        index: data.globalIndex,
-                                        isActive: tabManager.selectedTabId == data.workspace.id,
-                                        workspaceShortcutDigit: WorkspaceShortcutMapper.commandDigitForWorkspace(
-                                            at: data.globalIndex,
-                                            workspaceCount: workspaceCount
-                                        ),
-                                        canCloseWorkspace: canCloseWorkspace,
-                                        accessibilityWorkspaceCount: workspaceCount,
-                                        unreadCount: notificationStore.unreadCount(forTabId: data.workspace.id),
-                                        latestNotificationText: {
-                                            guard showsSidebarNotificationMessage,
-                                                  let notification = notificationStore.latestNotification(forTabId: data.workspace.id) else {
-                                                return nil
-                                            }
-                                            let text = notification.body.isEmpty ? notification.title : notification.body
-                                            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            return trimmed.isEmpty ? nil : trimmed
-                                        }(),
-                                        rowSpacing: tabRowSpacing,
-                                        setSelectionToTabs: { selection = .tabs },
-                                        selectedTabIds: $selectedTabIds,
-                                        lastSidebarSelectionIndex: $lastSidebarSelectionIndex,
-                                        showsModifierShortcutHints: modifierKeyMonitor.isModifierPressed,
-                                        dragAutoScrollController: dragAutoScrollController,
-                                        draggedTabId: $draggedTabId,
-                                        dropIndicator: $dropIndicator,
-                                        isGrouped: data.isGrouped
-                                    )
-                                    .equatable()
+                                        )
+                                    case .workspace(let data):
+                                        TabItemView(
+                                            tabManager: tabManager,
+                                            notificationStore: notificationStore,
+                                            tab: data.workspace,
+                                            index: data.globalIndex,
+                                            isActive: tabManager.selectedTabId == data.workspace.id,
+                                            workspaceShortcutDigit: WorkspaceShortcutMapper.commandDigitForWorkspace(
+                                                at: data.globalIndex,
+                                                workspaceCount: workspaceCount
+                                            ),
+                                            canCloseWorkspace: canCloseWorkspace,
+                                            accessibilityWorkspaceCount: workspaceCount,
+                                            unreadCount: notificationStore.unreadCount(forTabId: data.workspace.id),
+                                            latestNotificationText: {
+                                                guard showsSidebarNotificationMessage,
+                                                      let notification = notificationStore.latestNotification(forTabId: data.workspace.id) else {
+                                                    return nil
+                                                }
+                                                let text = notification.body.isEmpty ? notification.title : notification.body
+                                                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                return trimmed.isEmpty ? nil : trimmed
+                                            }(),
+                                            rowSpacing: tabRowSpacing,
+                                            setSelectionToTabs: { selection = .tabs },
+                                            selectedTabIds: $selectedTabIds,
+                                            lastSidebarSelectionIndex: $lastSidebarSelectionIndex,
+                                            showsModifierShortcutHints: modifierKeyMonitor.isModifierPressed,
+                                            dragAutoScrollController: dragAutoScrollController,
+                                            draggedTabId: $draggedTabId,
+                                            dropIndicator: $dropIndicator,
+                                            isGrouped: data.isGrouped
+                                        )
+                                        .equatable()
+                                    }
                                 }
                             }
                         }
@@ -8039,9 +8042,8 @@ struct VerticalTabsSidebar: View {
             )))
         }
 
-        // Repo groups — only show header when there are multiple repos or
-        // when there are both grouped and ungrouped workspaces.
-        let showHeaders = repoOrder.count > 1 || (!repoOrder.isEmpty && !ungrouped.isEmpty)
+        // Always show repo group headers when there are grouped workspaces.
+        let showHeaders = !repoOrder.isEmpty
 
         for repoRoot in repoOrder {
             guard let workspaces = repoWorkspaces[repoRoot] else { continue }
