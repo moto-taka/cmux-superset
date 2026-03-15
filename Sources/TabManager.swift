@@ -2215,7 +2215,9 @@ class TabManager: ObservableObject {
             )
             workspace.worktreePath = worktreePath
             workspace.worktreeRepoRoot = repoPath
-            workspace.customTitle = branchName
+            // Set initial title to branch name without using customTitle,
+            // so that applyProcessTitle() can still detect Claude/Codex.
+            workspace.applyProcessTitle(branchName)
 #if DEBUG
             cmuxDebugLog("worktree.created branch=\(branchName) path=\(worktreePath)")
 #endif
