@@ -8213,7 +8213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 #endif
                 openNewMainWindow(nil)
             } else {
-                NotificationCenter.default.post(name: .worktreeCreationRequested, object: nil)
+                NotificationCenter.default.post(name: .worktreeCreationRequested, object: NSApp.keyWindow)
             }
             return true
         }
@@ -8535,6 +8535,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Open browser: Cmd+Shift+L
         if matchShortcut(event: event, shortcut: KeyboardShortcutSettings.shortcut(for: .openBrowser)) {
             _ = openBrowserAndFocusAddressBar(insertAtEnd: true)
+            return true
+        }
+
+        // Open diff panel: Cmd+Shift+D
+        if matchShortcut(event: event, shortcut: KeyboardShortcutSettings.shortcut(for: .openDiffPanel)) {
+#if DEBUG
+            dlog("shortcut.action name=openDiffPanel \(debugShortcutRouteSnapshot(event: event))")
+#endif
+            _ = tabManager?.openDiffPanel()
             return true
         }
 

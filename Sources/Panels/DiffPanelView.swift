@@ -13,6 +13,8 @@ struct DiffPanelView: View {
 
     @State private var focusFlashOpacity: Double = 0.0
     @State private var focusFlashAnimationGeneration: Int = 0
+    @State private var showCommitSheet = false
+    @State private var commitMessage = ""
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -48,6 +50,24 @@ struct DiffPanelView: View {
         .onChange(of: panel.focusFlashToken) { _ in
             triggerFocusFlashAnimation()
         }
+        .sheet(isPresented: $showCommitSheet) {
+            commitSheet
+        }
+        .alert(
+            String(localized: "diff.error.title", defaultValue: "Error"),
+            isPresented: .init(
+                get: { panel.lastGitError != nil },
+                set: { if !$0 { panel.lastGitError = nil } }
+            )
+        ) {
+            Button(String(localized: "diff.error.ok", defaultValue: "OK"), role: .cancel) {
+                panel.lastGitError = nil
+            }
+        } message: {
+            if let error = panel.lastGitError {
+                Text(error)
+            }
+        }
     }
 
     // MARK: - Toolbar
@@ -80,6 +100,39 @@ struct DiffPanelView: View {
             Spacer()
 
             Button {
+                showCommitSheet = true
+            } label: {
+                Image(systemName: "arrow.up.doc")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(panel.isPerformingGitAction)
+            .help(String(localized: "diff.toolbar.commit", defaultValue: "Commit"))
+
+            Button {
+                panel.pushChanges()
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(panel.isPerformingGitAction)
+            .help(String(localized: "diff.toolbar.push", defaultValue: "Push"))
+
+            Button {
+                panel.pullChanges()
+            } label: {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(panel.isPerformingGitAction)
+            .help(String(localized: "diff.toolbar.pull", defaultValue: "Pull"))
+
+            Button {
                 panel.switchMode(panel.currentMode)
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -88,6 +141,12 @@ struct DiffPanelView: View {
             }
             .buttonStyle(.plain)
             .help(String(localized: "diff.toolbar.refresh", defaultValue: "Refresh"))
+
+            if panel.isPerformingGitAction {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 14, height: 14)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -138,6 +197,46 @@ struct DiffPanelView: View {
         case .easeOut:
             return .easeOut(duration: duration)
         }
+    }
+
+    // MARK: - Commit Sheet
+
+    private var commitSheet: some View {
+        VStack(spacing: 16) {
+            Text(String(localized: "diff.commit.title", defaultValue: "Commit Changes"))
+                .font(.headline)
+
+            TextField(
+                String(localized: "diff.commit.placeholder", defaultValue: "Commit message"),
+                text: $commitMessage
+            )
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 300)
+
+            HStack {
+                Button(String(localized: "diff.commit.cancel", defaultValue: "Cancel")) {
+                    commitMessage = ""
+                    showCommitSheet = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button(String(localized: "diff.commit.confirm", defaultValue: "Commit")) {
+                    let message = commitMessage
+                    commitMessage = ""
+                    showCommitSheet = false
+                    panel.stageAll()
+                    // Use a small delay to let stageAll finish before committing.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        panel.commitChanges(message: message)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
     }
 }
 
