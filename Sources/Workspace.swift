@@ -6661,6 +6661,11 @@ final class Workspace: Identifiable, ObservableObject {
     /// Whether this workspace was created as a worktree workspace.
     var isWorktreeWorkspace: Bool { worktreePath != nil }
 
+    /// Detected git repository root for this workspace's working directory.
+    /// Set from `worktreeRepoRoot` for worktree workspaces, or detected
+    /// via `git rev-parse --show-toplevel` during the initial git probe.
+    @Published var gitRepoRoot: String?
+
     /// Ordinal for CMUX_PORT range assignment (monotonically increasing per app session)
     var portOrdinal: Int = 0
 

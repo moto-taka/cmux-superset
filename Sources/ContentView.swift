@@ -9677,6 +9677,163 @@ struct VerticalTabsSidebar: View {
         guard let id else { return "nil" }
         return String(id.uuidString.prefix(5))
     }
+
+    // MARK: - Sidebar Repo Grouping
+
+    private func buildSidebarItems(
+        tabs: [Workspace],
+        collapsedRepoGroups: Set<String>
+    ) -> [SidebarListItem] {
+        // Build a mapping from global index to workspace, preserving tab order.
+        var globalIndexByWorkspaceId: [UUID: Int] = [:]
+        for (index, tab) in tabs.enumerated() {
+            globalIndexByWorkspaceId[tab.id] = index
+        }
+
+        // Group workspaces by gitRepoRoot, preserving first-seen order.
+        var repoOrder: [String] = []
+        var repoWorkspaces: [String: [Workspace]] = [:]
+        var ungrouped: [Workspace] = []
+
+        for tab in tabs {
+            if let root = tab.gitRepoRoot {
+                if repoWorkspaces[root] == nil {
+                    repoOrder.append(root)
+                }
+                repoWorkspaces[root, default: []].append(tab)
+            } else {
+                ungrouped.append(tab)
+            }
+        }
+
+        var items: [SidebarListItem] = []
+
+        // Ungrouped workspaces first (no git repo detected).
+        for tab in ungrouped {
+            let index = globalIndexByWorkspaceId[tab.id] ?? 0
+            items.append(.workspace(SidebarWorkspaceItemData(
+                workspace: tab,
+                globalIndex: index,
+                isGrouped: false
+            )))
+        }
+
+        // Repo groups — only show header when there are multiple repos or
+        // when there are both grouped and ungrouped workspaces.
+        let showHeaders = repoOrder.count > 1 || (!repoOrder.isEmpty && !ungrouped.isEmpty)
+
+        for repoRoot in repoOrder {
+            guard let workspaces = repoWorkspaces[repoRoot] else { continue }
+
+            if showHeaders {
+                let isExpanded = !collapsedRepoGroups.contains(repoRoot)
+                let repoName = (repoRoot as NSString).lastPathComponent
+                items.append(.repoHeader(SidebarRepoHeaderData(
+                    repoRoot: repoRoot,
+                    repoName: repoName,
+                    workspaceCount: workspaces.count,
+                    isExpanded: isExpanded
+                )))
+
+                if isExpanded {
+                    for tab in workspaces {
+                        let index = globalIndexByWorkspaceId[tab.id] ?? 0
+                        items.append(.workspace(SidebarWorkspaceItemData(
+                            workspace: tab,
+                            globalIndex: index,
+                            isGrouped: true
+                        )))
+                    }
+                }
+            } else {
+                // Single repo, no ungrouped — show workspaces without header.
+                for tab in workspaces {
+                    let index = globalIndexByWorkspaceId[tab.id] ?? 0
+                    items.append(.workspace(SidebarWorkspaceItemData(
+                        workspace: tab,
+                        globalIndex: index,
+                        isGrouped: false
+                    )))
+                }
+            }
+        }
+
+        return items
+    }
+}
+
+// MARK: - Sidebar Repo Grouping Types
+
+private enum SidebarListItem: Identifiable {
+    case repoHeader(SidebarRepoHeaderData)
+    case workspace(SidebarWorkspaceItemData)
+
+    var id: String {
+        switch self {
+        case .repoHeader(let data): return "repo-\(data.repoRoot)"
+        case .workspace(let data): return "ws-\(data.workspace.id.uuidString)"
+        }
+    }
+}
+
+private struct SidebarRepoHeaderData {
+    let repoRoot: String
+    let repoName: String
+    let workspaceCount: Int
+    let isExpanded: Bool
+}
+
+private struct SidebarWorkspaceItemData {
+    let workspace: Workspace
+    let globalIndex: Int
+    let isGrouped: Bool
+}
+
+private struct SidebarRepoGroupHeaderView: View {
+    let repoName: String
+    let workspaceCount: Int
+    let isExpanded: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 6) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 10)
+
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.8))
+
+                Text(repoName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Text("\(workspaceCount)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.secondary.opacity(0.12))
+                    .clipShape(Capsule())
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            String(localized: "sidebar.repoGroup.accessibilityLabel",
+                   defaultValue: "\(repoName), \(workspaceCount) workspaces")
+        )
+        .accessibilityAddTraits(.isButton)
+    }
 }
 
 private struct SidebarWorkspaceRowIdsPreferenceKey: PreferenceKey {
@@ -12624,6 +12781,7 @@ private struct TabItemView: View, Equatable {
                 }
         )
         .padding(.horizontal, 6)
+        .padding(.leading, isGrouped ? 12 : 0)
         .background {
             GeometryReader { proxy in
                 Color.clear

@@ -727,6 +727,7 @@ class TabManager: ObservableObject {
         let branch: String?
         let isDirty: Bool
         let pullRequest: WorkspacePullRequestSnapshot
+        let gitRoot: String?
     }
 
     struct CommandResult: Sendable {
@@ -2215,6 +2216,7 @@ class TabManager: ObservableObject {
             )
             workspace.worktreePath = worktreePath
             workspace.worktreeRepoRoot = repoPath
+            workspace.gitRepoRoot = repoPath
             // Set initial title to branch name without using customTitle,
             // so that applyProcessTitle() can still detect Claude/Codex.
             workspace.applyProcessTitle(branchName)
@@ -2464,6 +2466,11 @@ class TabManager: ObservableObject {
 
         workspace.updatePanelDirectory(panelId: probeKey.panelId, directory: expectedDirectory)
 
+        // Update git repo root if detected and not already set (e.g. by worktree creation).
+        if let gitRoot = snapshot.gitRoot, !gitRoot.isEmpty, workspace.gitRepoRoot != gitRoot {
+            workspace.gitRepoRoot = gitRoot
+        }
+
         let resolvedPullRequest: SidebarPullRequestState? = {
             guard case .resolved(let pullRequest) = snapshot.pullRequest else { return nil }
             return pullRequest
@@ -2551,13 +2558,23 @@ class TabManager: ObservableObject {
     private nonisolated static func initialWorkspaceGitMetadataSnapshot(
         for directory: String
     ) async -> InitialWorkspaceGitMetadataSnapshot {
+        let gitRootOutput = await runGitCommand(directory: directory, arguments: ["rev-parse", "--git-common-dir"])
+        let gitRoot: String? = gitRootOutput
+            .flatMap { rawCommonDir -> String? in
+                let trimmed = rawCommonDir.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return nil }
+                let url = URL(fileURLWithPath: trimmed, isDirectory: true)
+                let resolved = url.lastPathComponent == ".git" ? url.deletingLastPathComponent() : url
+                return resolved.path
+            }
         let branchOutput = await runGitCommand(directory: directory, arguments: ["branch", "--show-current"])
         let branch = normalizedBranchName(branchOutput)
         guard let branch else {
             return InitialWorkspaceGitMetadataSnapshot(
                 branch: nil,
                 isDirty: false,
-                pullRequest: .notFound
+                pullRequest: .notFound,
+                gitRoot: gitRoot
             )
         }
 
@@ -2566,7 +2583,8 @@ class TabManager: ObservableObject {
         return InitialWorkspaceGitMetadataSnapshot(
             branch: branch,
             isDirty: isDirty,
-            pullRequest: .deferred
+            pullRequest: .deferred,
+            gitRoot: gitRoot
         )
     }
 
