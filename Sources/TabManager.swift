@@ -627,6 +627,7 @@ class TabManager: ObservableObject {
     private struct InitialWorkspaceGitMetadataSnapshot: Equatable {
         let branch: String?
         let isDirty: Bool
+        let gitRoot: String?
     }
 
     /// The window that owns this TabManager. Set by AppDelegate.registerMainWindow().
@@ -1077,6 +1078,7 @@ class TabManager: ObservableObject {
             )
             workspace.worktreePath = worktreePath
             workspace.worktreeRepoRoot = repoPath
+            workspace.gitRepoRoot = repoPath
             // Set initial title to branch name without using customTitle,
             // so that applyProcessTitle() can still detect Claude/Codex.
             workspace.applyProcessTitle(branchName)
@@ -1208,6 +1210,11 @@ class TabManager: ObservableObject {
 
         workspace.updatePanelDirectory(panelId: panelId, directory: expectedDirectory)
 
+        // Update git repo root if detected and not already set (e.g. by worktree creation).
+        if let gitRoot = snapshot.gitRoot, !gitRoot.isEmpty, workspace.gitRepoRoot != gitRoot {
+            workspace.gitRepoRoot = gitRoot
+        }
+
         let previousBranch = Self.normalizedBranchName(workspace.panelGitBranches[panelId]?.branch)
         let nextBranch = snapshot.branch
         if let nextBranch {
@@ -1232,14 +1239,17 @@ class TabManager: ObservableObject {
     private nonisolated static func initialWorkspaceGitMetadataSnapshot(
         for directory: String
     ) -> InitialWorkspaceGitMetadataSnapshot {
+        let gitRoot = runGitCommand(directory: directory, arguments: ["rev-parse", "--show-toplevel"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         let branch = normalizedBranchName(runGitCommand(directory: directory, arguments: ["branch", "--show-current"]))
         guard let branch else {
-            return InitialWorkspaceGitMetadataSnapshot(branch: nil, isDirty: false)
+            return InitialWorkspaceGitMetadataSnapshot(branch: nil, isDirty: false, gitRoot: gitRoot)
         }
 
         let statusOutput = runGitCommand(directory: directory, arguments: ["status", "--porcelain", "-uno"])
         let isDirty = !(statusOutput?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-        return InitialWorkspaceGitMetadataSnapshot(branch: branch, isDirty: isDirty)
+        return InitialWorkspaceGitMetadataSnapshot(branch: branch, isDirty: isDirty, gitRoot: gitRoot)
     }
 
     private nonisolated static func runGitCommand(directory: String, arguments: [String]) -> String? {
