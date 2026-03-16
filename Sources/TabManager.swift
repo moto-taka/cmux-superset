@@ -2145,6 +2145,10 @@ class TabManager: ObservableObject {
                     workspaceId: newWorkspace.id,
                     panelId: terminalPanel.id
                 )
+            } else if newWorkspace.gitRepoRoot == nil {
+                // Even without a terminal panel to drive the metadata probe, detect the git
+                // repo root from the workspace's current directory for sidebar grouping.
+                detectGitRepoRoot(for: newWorkspace, directory: newWorkspace.currentDirectory)
             }
             if eagerLoadTerminal {
                 if select {
