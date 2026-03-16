@@ -2617,6 +2617,113 @@ final class BrowserNavigationNewTabDecisionTests: XCTestCase {
     }
 }
 
+final class BrowserPopupDecisionTests: XCTestCase {
+    func testLinkActivatedPlainLeftClickDoesNotCreatePopup() {
+        XCTAssertFalse(
+            browserNavigationShouldCreatePopup(
+                navigationType: .linkActivated,
+                modifierFlags: [],
+                buttonNumber: 0
+            )
+        )
+    }
+
+    func testOtherNavigationPlainLeftClickCreatesPopup() {
+        XCTAssertTrue(
+            browserNavigationShouldCreatePopup(
+                navigationType: .other,
+                modifierFlags: [],
+                buttonNumber: 0
+            )
+        )
+    }
+
+    func testOtherNavigationMiddleClickDoesNotCreatePopup() {
+        XCTAssertFalse(
+            browserNavigationShouldCreatePopup(
+                navigationType: .other,
+                modifierFlags: [],
+                buttonNumber: 2
+            )
+        )
+    }
+
+    func testLinkActivatedCmdClickDoesNotCreatePopup() {
+        XCTAssertFalse(
+            browserNavigationShouldCreatePopup(
+                navigationType: .linkActivated,
+                modifierFlags: [.command],
+                buttonNumber: 0
+            )
+        )
+    }
+}
+
+final class BrowserNilTargetFallbackDecisionTests: XCTestCase {
+    func testOtherNavigationDoesNotFallbackToNewTab() {
+        XCTAssertFalse(
+            browserNavigationShouldFallbackNilTargetToNewTab(
+                navigationType: .other
+            )
+        )
+    }
+
+    func testLinkActivatedNavigationFallsBackToNewTab() {
+        XCTAssertTrue(
+            browserNavigationShouldFallbackNilTargetToNewTab(
+                navigationType: .linkActivated
+            )
+        )
+    }
+}
+
+final class BrowserPopupContentRectTests: XCTestCase {
+    func testExplicitTopOriginCoordinatesConvertToAppKitBottomOrigin() {
+        let rect = browserPopupContentRect(
+            requestedWidth: 400,
+            requestedHeight: 300,
+            requestedX: 150,
+            requestedTopY: 120,
+            visibleFrame: NSRect(x: 100, y: 50, width: 1000, height: 800)
+        )
+
+        XCTAssertEqual(rect.origin.x, 150, accuracy: 0.01)
+        XCTAssertEqual(rect.origin.y, 430, accuracy: 0.01)
+        XCTAssertEqual(rect.width, 400, accuracy: 0.01)
+        XCTAssertEqual(rect.height, 300, accuracy: 0.01)
+    }
+
+    func testExplicitCoordinatesClampToVisibleFrame() {
+        let rect = browserPopupContentRect(
+            requestedWidth: 1400,
+            requestedHeight: 1200,
+            requestedX: 900,
+            requestedTopY: -25,
+            visibleFrame: NSRect(x: 100, y: 50, width: 1000, height: 800)
+        )
+
+        XCTAssertEqual(rect.origin.x, 100, accuracy: 0.01)
+        XCTAssertEqual(rect.origin.y, 50, accuracy: 0.01)
+        XCTAssertEqual(rect.width, 1000, accuracy: 0.01)
+        XCTAssertEqual(rect.height, 800, accuracy: 0.01)
+    }
+
+    func testMissingCoordinatesCentersPopup() {
+        let rect = browserPopupContentRect(
+            requestedWidth: 300,
+            requestedHeight: 200,
+            requestedX: nil,
+            requestedTopY: nil,
+            visibleFrame: NSRect(x: 100, y: 50, width: 1000, height: 800)
+        )
+
+        XCTAssertEqual(rect.origin.x, 450, accuracy: 0.01)
+        XCTAssertEqual(rect.origin.y, 350, accuracy: 0.01)
+        XCTAssertEqual(rect.width, 300, accuracy: 0.01)
+        XCTAssertEqual(rect.height, 200, accuracy: 0.01)
+    }
+}
+
 @MainActor
 final class BrowserJavaScriptDialogDelegateTests: XCTestCase {
     func testBrowserPanelUIDelegateImplementsJavaScriptDialogSelectors() {
@@ -11936,6 +12043,18 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         return nil
     }
 
+    private func firstResponderOwnsTextField(_ firstResponder: NSResponder?, textField: NSTextField) -> Bool {
+        if firstResponder === textField {
+            return true
+        }
+        if let editor = firstResponder as? NSTextView,
+           editor.isFieldEditor,
+           editor.delegate as? NSTextField === textField {
+            return true
+        }
+        return false
+    }
+
     func testTrackpadScrollRoutesToTerminalSurfaceAndPreservesKeyboardFocusPath() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
@@ -12068,10 +12187,103 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
 
         let searchState = TerminalSurface.SearchState(needle: "example")
         hostedView.setSearchOverlay(searchState: searchState)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         XCTAssertTrue(hostedView.debugHasSearchOverlay())
 
         hostedView.setSearchOverlay(searchState: nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         XCTAssertFalse(hostedView.debugHasSearchOverlay())
+    }
+
+    func testRapidSearchOverlayToggleDoesNotLeaveStaleOverlayMounted() {
+        let surface = TerminalSurface(
+            tabId: UUID(),
+            context: GHOSTTY_SURFACE_CONTEXT_SPLIT,
+            configTemplate: nil,
+            workingDirectory: nil
+        )
+        let hostedView = surface.hostedView
+
+        hostedView.setSearchOverlay(searchState: TerminalSurface.SearchState(needle: "example"))
+        hostedView.setSearchOverlay(searchState: nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+        XCTAssertFalse(
+            hostedView.debugHasSearchOverlay(),
+            "A stale deferred mount must not resurrect the find overlay after it closes"
+        )
+    }
+
+    func testSearchOverlayFocusesSearchFieldAfterDeferredAttach() {
+        let surface = TerminalSurface(
+            tabId: UUID(),
+            context: GHOSTTY_SURFACE_CONTEXT_SPLIT,
+            configTemplate: nil,
+            workingDirectory: nil
+        )
+        let hostedView = surface.hostedView
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+        hostedView.frame = contentView.bounds
+        hostedView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostedView)
+
+        window.makeKeyAndOrderFront(nil)
+        window.displayIfNeeded()
+        contentView.layoutSubtreeIfNeeded()
+        hostedView.setVisibleInUI(true)
+        hostedView.setActive(true)
+
+        let searchState = TerminalSurface.SearchState(needle: "")
+        surface.searchState = searchState
+        hostedView.setSearchOverlay(searchState: searchState)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+        guard let searchField = findEditableTextField(in: hostedView) else {
+            XCTFail("Expected mounted find text field")
+            return
+        }
+
+        XCTAssertTrue(
+            firstResponderOwnsTextField(window.firstResponder, textField: searchField),
+            "Deferred search overlay attach should still move focus into the find field"
+        )
+    }
+
+    func testStartOrFocusTerminalSearchReusesExistingSearchState() {
+        let surface = TerminalSurface(
+            tabId: UUID(),
+            context: GHOSTTY_SURFACE_CONTEXT_SPLIT,
+            configTemplate: nil,
+            workingDirectory: nil
+        )
+        let existingSearchState = TerminalSurface.SearchState(needle: "existing")
+        surface.searchState = existingSearchState
+
+        var focusNotificationCount = 0
+        XCTAssertTrue(
+            startOrFocusTerminalSearch(surface) { _ in
+                focusNotificationCount += 1
+            }
+        )
+
+        XCTAssertTrue(surface.searchState === existingSearchState)
+        XCTAssertEqual(
+            focusNotificationCount,
+            1,
+            "Re-triggering terminal Find should refocus the existing overlay without recreating state"
+        )
     }
 
     func testEscapeDismissingFindOverlayDoesNotLeakEscapeKeyUpToTerminal() {
@@ -12309,6 +12521,7 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         )
         let hostedView = surface.hostedView
         hostedView.setSearchOverlay(searchState: TerminalSurface.SearchState(needle: "split"))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         XCTAssertTrue(hostedView.debugHasSearchOverlay())
 
         portal.bind(hostedView: hostedView, to: anchorA, visibleInUI: true)
@@ -12347,6 +12560,7 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         )
         let hostedView = surface.hostedView
         hostedView.setSearchOverlay(searchState: TerminalSurface.SearchState(needle: "workspace"))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         XCTAssertTrue(hostedView.debugHasSearchOverlay())
 
         portal.bind(hostedView: hostedView, to: anchor, visibleInUI: true)
