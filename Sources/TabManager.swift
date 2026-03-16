@@ -1009,6 +1009,10 @@ class TabManager: ObservableObject {
                 panelId: terminalPanel.id,
                 directory: explicitWorkingDirectory
             )
+        } else if newWorkspace.gitRepoRoot == nil {
+            // Even without an explicit working directory, detect the git repo root
+            // from the workspace's current directory for sidebar grouping.
+            detectGitRepoRoot(for: newWorkspace, directory: newWorkspace.currentDirectory)
         }
         if eagerLoadTerminal {
             requestBackgroundWorkspaceLoad(for: newWorkspace.id)
