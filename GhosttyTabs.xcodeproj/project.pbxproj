@@ -1305,7 +1305,7 @@
 					Carbon,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.cmuxterm.app;
-				PRODUCT_NAME = cmux;
+				PRODUCT_NAME = "cmux-superset";
 				SPARKLE_PUBLIC_KEY = "avjcgKibf1FTvhIjLBxhd+0HSpsXU4D0IGlVk8cgqRc=";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "cmux-Bridging-Header.h";
