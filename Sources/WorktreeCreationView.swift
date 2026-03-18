@@ -59,20 +59,45 @@ struct WorktreeCreationView: View {
                 .font(.system(size: 13))
 
                 // Base branch (optional)
-                HStack {
-                    Text(String(localized: "worktree.baseBranch.label", defaultValue: "Base:"))
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(String(localized: "worktree.baseBranch.label", defaultValue: "Base:"))
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
 
-                    if detectedBranches.isEmpty {
                         TextField(defaultBranch, text: $baseBranch)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 13))
-                    } else {
-                        Picker("", selection: $baseBranch) {
-                            ForEach(detectedBranches, id: \.self) { branch in
-                                Text(branch).tag(branch)
+                    }
+
+                    if !detectedBranches.isEmpty && !baseBranch.isEmpty
+                        && !detectedBranches.contains(baseBranch) {
+                        let filtered = detectedBranches.filter {
+                            $0.localizedCaseInsensitiveContains(baseBranch)
+                        }
+                        if !filtered.isEmpty {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(filtered.prefix(20), id: \.self) { branch in
+                                        Text(branch)
+                                            .font(.system(size: 12, design: .monospaced))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                baseBranch = branch
+                                            }
+                                    }
+                                }
                             }
+                            .frame(maxHeight: 120)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                            )
                         }
                     }
                 }
@@ -123,20 +148,28 @@ struct WorktreeCreationView: View {
         .padding(20)
         .frame(width: 420)
         .onChange(of: repoPath) { _, newPath in
-            validateRepo(newPath)
+            if useWorktree {
+                validateRepo(newPath)
+            }
+        }
+        .onChange(of: useWorktree) { _, isWorktree in
+            if isWorktree {
+                validateRepo(repoPath)
+            } else {
+                // Switching to Regular mode: restore original directory if available
+                if let dir = initialDirectory, !dir.isEmpty, dir != NSHomeDirectory() {
+                    repoPath = dir
+                }
+            }
         }
         .onAppear {
             loadRecentRepos()
             if let dir = initialDirectory, !dir.isEmpty, dir != NSHomeDirectory() {
-                // Auto-detect the main git repo root from current workspace directory.
-                // Use --git-common-dir instead of --show-toplevel because --show-toplevel
-                // returns the worktree root (not the main repo) when run inside a worktree.
+                // Initial mode is always Worktree, so auto-detect git root.
                 DispatchQueue.global(qos: .userInitiated).async {
                     let root = Self.findMainRepoRoot(from: dir)
-                    if let root, !root.isEmpty {
-                        DispatchQueue.main.async {
-                            repoPath = root
-                        }
+                    DispatchQueue.main.async {
+                        repoPath = (root != nil && !root!.isEmpty) ? root! : dir
                     }
                 }
             }
@@ -171,6 +204,8 @@ struct WorktreeCreationView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let mainRoot = Self.findMainRepoRoot(from: path)
             DispatchQueue.main.async {
+                // Discard stale result if repoPath changed while async was in flight
+                guard repoPath == path || repoPath == mainRoot else { return }
                 if let mainRoot {
                     isValidRepo = true
                     // Canonicalize to main repo root to prevent nested worktrees
@@ -186,12 +221,12 @@ struct WorktreeCreationView: View {
         }
     }
 
-    private func detectBranches(_ repoPath: String) {
+    private func detectBranches(_ forRepoPath: String) {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
             process.arguments = ["branch", "-a", "--format=%(refname:short)"]
-            process.currentDirectoryURL = URL(fileURLWithPath: repoPath)
+            process.currentDirectoryURL = URL(fileURLWithPath: forRepoPath)
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = FileHandle.nullDevice
@@ -207,13 +242,21 @@ struct WorktreeCreationView: View {
                         .filter { !$0.isEmpty && !$0.contains("HEAD") }
 
                     DispatchQueue.main.async {
+                        // Discard stale result if repo changed while async was in flight
+                        guard repoPath == forRepoPath else { return }
                         detectedBranches = branches
+                        // Only auto-fill baseBranch if empty or no longer valid for this repo
+                        let needsAutoFill = baseBranch.isEmpty || !branches.contains(baseBranch)
                         if let mainBranch = branches.first(where: { $0 == "main" || $0 == "master" }) {
-                            baseBranch = mainBranch
                             defaultBranch = mainBranch
+                            if needsAutoFill {
+                                baseBranch = mainBranch
+                            }
                         } else if let first = branches.first {
-                            baseBranch = first
                             defaultBranch = first
+                            if needsAutoFill {
+                                baseBranch = first
+                            }
                         }
                     }
                 }
