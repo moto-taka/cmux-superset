@@ -90,7 +90,7 @@ final class DiffPanel: Panel, ObservableObject {
         isClosed = true
     }
 
-    func triggerFlash() {
+    func triggerFlash(reason: WorkspaceAttentionFlashReason) {
         guard NotificationPaneFlashSettings.isEnabled() else { return }
         focusFlashToken += 1
     }
