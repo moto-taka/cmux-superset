@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-TW.md">繁體中文</a> | <a href="README.ko.md">한국어</a> | <a href="README.de.md">Deutsch</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.it.md">Italiano</a> | <a href="README.da.md">Dansk</a> | <a href="README.ja.md">日本語</a> | <a href="README.pl.md">Polski</a> | <a href="README.ru.md">Русский</a> | <a href="README.bs.md">Bosanski</a> | <a href="README.ar.md">العربية</a> | <a href="README.no.md">Norsk</a> | <a href="README.pt-BR.md">Português (Brasil)</a> | <a href="README.th.md">ไทย</a> | <a href="README.tr.md">Türkçe</a> | ភាសាខ្មែរ
+  <a href="README.md">English</a> | <a href="README.ja.md">日本語</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-TW.md">繁體中文</a> | <a href="README.ko.md">한국어</a> | <a href="README.de.md">Deutsch</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.it.md">Italiano</a> | <a href="README.da.md">Dansk</a> | <a href="README.pl.md">Polski</a> | <a href="README.ru.md">Русский</a> | <a href="README.bs.md">Bosanski</a> | <a href="README.ar.md">العربية</a> | <a href="README.no.md">Norsk</a> | <a href="README.pt-BR.md">Português (Brasil)</a> | <a href="README.th.md">ไทย</a> | <a href="README.tr.md">Türkçe</a> | ភាសាខ្មែរ | <a href="README.uk.md">Українська</a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=i-WxO5YUTOs">▶ វីដេអូបង្ហាញពីដំណើរការ (Demo)</a> · <a href="https://cmux.dev/blog/zen-of-cmux">ទស្សនវិជ្ជារបស់ cmux (The Zen of cmux)</a>
+  <a href="https://www.youtube.com/watch?v=i-WxO5YUTOs">▶ វីដេអូបង្ហាញពីដំណើរការ (Demo)</a> · <a href="https://cmux.com/blog/zen-of-cmux">ទស្សនវិជ្ជារបស់ cmux (The Zen of cmux)</a>
 </p>
 
 ## លក្ខណៈពិសេសនានា (Features)
@@ -121,7 +121,7 @@ cmux គឺជាមូលដ្ឋានគ្រឹះ (primitive) មិន�
 
 ## ឯកសារ (Documentation)
 
-សម្រាប់ព័ត៌មានបន្ថែមអំពីរបៀបកំណត់រចនាសម្ព័ន្ធ cmux, [សូមចូលទៅកាន់ឯកសាររបស់យើង](https://cmux.dev/docs/getting-started?utm_source=readme)។
+សម្រាប់ព័ត៌មានបន្ថែមអំពីរបៀបកំណត់រចនាសម្ព័ន្ធ cmux, [សូមចូលទៅកាន់ឯកសាររបស់យើង](https://cmux.com/docs/getting-started?utm_source=readme)។
 
 ## គ្រាប់ចុចផ្លូវកាត់ (Keyboard Shortcuts)
 
@@ -269,6 +269,6 @@ cmux គឺឥតគិតថ្លៃ ជាកូដបើកចំហ (open s
 
 ## អាជ្ញាប័ណ្ណ (License)
 
-គម្រោងនេះត្រូវបានផ្តល់អាជ្ញាប័ណ្ណក្រោម GNU Affero General Public License v3.0 ឬក្រោយនេះ (`AGPL-3.0-or-later`)។
+cmux គឺជាកម្មវិធីប្រភពបើកចំហក្រោម [GPL-3.0-or-later](LICENSE)។
 
-សូមមើលឯកសារ `LICENSE` សម្រាប់អត្ថបទពេញលេញ។
+ប្រសិនបើស្ថាប័នរបស់អ្នកមិនអាចអនុលោមតាម GPL បាន អាជ្ញាប័ណ្ណពាណិជ្ជកម្មមានផ្តល់ជូន។ ទាក់ទង [founders@manaflow.com](mailto:founders@manaflow.com) សម្រាប់ព័ត៌មានលម្អិត។
