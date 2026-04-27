@@ -10253,7 +10253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 #endif
                 openNewMainWindow(nil)
             } else {
-                NotificationCenter.default.post(name: .worktreeCreationRequested, object: nil)
+                NotificationCenter.default.post(name: .worktreeCreationRequested, object: NSApp.keyWindow)
             }
             return true
         }
