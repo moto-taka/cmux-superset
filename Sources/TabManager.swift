@@ -4077,8 +4077,8 @@ class TabManager: ObservableObject {
     /// directories correctly resolve to the main repository root.
     private func detectGitRepoRoot(for workspace: Workspace, directory: String) {
         let workspaceId = workspace.id
-        DispatchQueue.global(qos: .utility).async {
-            let gitCommonDir = Self.runGitCommand(
+        Task.detached(priority: .utility) {
+            let gitCommonDir = await Self.runGitCommand(
                 directory: directory,
                 arguments: ["rev-parse", "--path-format=absolute", "--git-common-dir"]
             )?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4095,7 +4095,7 @@ class TabManager: ObservableObject {
                 newRoot = nil
             }
 
-            Task { @MainActor [weak self] in
+            await MainActor.run { [weak self] in
                 guard let self,
                       let workspace = self.tabs.first(where: { $0.id == workspaceId }) else { return }
                 // Only update if the repo root actually changed.
@@ -5815,19 +5815,6 @@ class TabManager: ObservableObject {
             url: url,
             preferredProfileID: preferredProfileID
         )?.id
-    }
-
-    /// Open a diff panel in the focused pane of the selected workspace.
-    /// Uses the workspace's current working directory to find the git root.
-    @discardableResult
-    func openDiffPanel() -> DiffPanel? {
-        guard let workspace = selectedWorkspace,
-              let paneId = workspace.bonsplitController.focusedPaneId else { return nil }
-
-        let workingDir = workspace.currentDirectory
-        let repoPath = WorktreeManager.shared.findGitRoot(for: workingDir) ?? workingDir
-
-        return workspace.newDiffSurface(inPane: paneId, repoPath: repoPath, focus: true)
     }
 
     /// Get a browser panel by ID

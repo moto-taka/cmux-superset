@@ -6216,8 +6216,6 @@ struct ContentView: View {
             return String(localized: "commandPalette.kind.browser", defaultValue: "Browser")
         case .markdown:
             return String(localized: "commandPalette.kind.markdown", defaultValue: "Markdown")
-        case .diff:
-            return String(localized: "commandPalette.kind.diff", defaultValue: "Diff")
         }
     }
 
@@ -6229,8 +6227,6 @@ struct ContentView: View {
             return ["browser", "web", "page"]
         case .markdown:
             return ["markdown", "note", "preview"]
-        case .diff:
-            return ["diff", "changes", "git"]
         }
     }
 
@@ -12519,23 +12515,6 @@ private struct TabItemView: View, Equatable {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 4) {
-                    // Git diff button
-                    Button(action: {
-                        tabManager.selectedTabId = tab.id
-                        tabManager.openDiffPanel()
-                    }) {
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(activeSecondaryColor(0.7))
-                    }
-                    .buttonStyle(.plain)
-                    .safeHelp(String(localized: "sidebar.gitChanges.tooltip", defaultValue: "Git Changes"))
-                    .frame(width: 16, height: 16, alignment: .center)
-                    .opacity(isHovering && !showsWorkspaceShortcutHint ? 1 : 0)
-                    .allowsHitTesting(isHovering && !showsWorkspaceShortcutHint)
-                }
-
                 ZStack(alignment: .trailing) {
                     Button(action: {
                         #if DEBUG
@@ -12773,7 +12752,6 @@ private struct TabItemView: View, Equatable {
                 }
         )
         .padding(.horizontal, 6)
-        .padding(.leading, isGrouped ? 12 : 0)
         .background {
             GeometryReader { proxy in
                 Color.clear

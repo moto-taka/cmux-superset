@@ -774,9 +774,6 @@ extension Workspace {
             }
             applySessionPanelMetadata(snapshot, toPanelId: markdownPanel.id)
             return markdownPanel.id
-        case .diff:
-            // Diff panels are transient and not restored from session.
-            return nil
         }
     }
 
@@ -7525,8 +7522,6 @@ final class Workspace: Identifiable, ObservableObject {
             return SurfaceKind.browser
         case .markdown:
             return SurfaceKind.markdown
-        case .diff:
-            return "diff"
         }
     }
 
@@ -9623,105 +9618,6 @@ final class Workspace: Identifiable, ObservableObject {
 
         installMarkdownPanelSubscription(markdownPanel)
         return markdownPanel
-    }
-
-    /// Create a new diff surface (tab) in the specified pane.
-    @discardableResult
-    func newDiffSurface(
-        inPane paneId: PaneID,
-        repoPath: String,
-        focus: Bool? = nil
-    ) -> DiffPanel? {
-        let shouldFocusNewTab = focus ?? (bonsplitController.focusedPaneId == paneId)
-
-        let diffPanel = DiffPanel(workspaceId: id, repoPath: repoPath)
-        panels[diffPanel.id] = diffPanel
-        panelTitles[diffPanel.id] = diffPanel.displayTitle
-
-        guard let newTabId = bonsplitController.createTab(
-            title: diffPanel.displayTitle,
-            icon: diffPanel.displayIcon,
-            kind: "diff",
-            isDirty: diffPanel.isDirty,
-            isLoading: false,
-            isPinned: false,
-            inPane: paneId
-        ) else {
-            panels.removeValue(forKey: diffPanel.id)
-            panelTitles.removeValue(forKey: diffPanel.id)
-            return nil
-        }
-
-        surfaceIdToPanelId[newTabId] = diffPanel.id
-
-        if shouldFocusNewTab {
-            bonsplitController.focusPane(paneId)
-            bonsplitController.selectTab(newTabId)
-            applyTabSelection(tabId: newTabId, inPane: paneId)
-        }
-
-        return diffPanel
-    }
-
-    /// Create a new diff panel as a split from the currently focused panel.
-    @discardableResult
-    func newDiffSplit(
-        from panelId: UUID,
-        orientation: SplitOrientation,
-        repoPath: String,
-        focus: Bool = true
-    ) -> DiffPanel? {
-        guard let sourceTabId = surfaceIdFromPanelId(panelId) else { return nil }
-        var sourcePaneId: PaneID?
-        for paneId in bonsplitController.allPaneIds {
-            let tabs = bonsplitController.tabs(inPane: paneId)
-            if tabs.contains(where: { $0.id == sourceTabId }) {
-                sourcePaneId = paneId
-                break
-            }
-        }
-        guard let paneId = sourcePaneId else { return nil }
-
-        let diffPanel = DiffPanel(workspaceId: id, repoPath: repoPath)
-        panels[diffPanel.id] = diffPanel
-        panelTitles[diffPanel.id] = diffPanel.displayTitle
-
-        let newTab = Bonsplit.Tab(
-            title: diffPanel.displayTitle,
-            icon: diffPanel.displayIcon,
-            kind: "diff",
-            isDirty: diffPanel.isDirty,
-            isLoading: false,
-            isPinned: false
-        )
-        surfaceIdToPanelId[newTab.id] = diffPanel.id
-        let previousFocusedPanelId = focusedPanelId
-
-        isProgrammaticSplit = true
-        defer { isProgrammaticSplit = false }
-        guard bonsplitController.splitPane(paneId, orientation: orientation, withTab: newTab, insertFirst: false) != nil else {
-            surfaceIdToPanelId.removeValue(forKey: newTab.id)
-            panels.removeValue(forKey: diffPanel.id)
-            panelTitles.removeValue(forKey: diffPanel.id)
-            return nil
-        }
-
-        let previousHostedView = focusedTerminalPanel?.hostedView
-        if focus {
-            previousHostedView?.suppressReparentFocus()
-            focusPanel(diffPanel.id)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                previousHostedView?.clearSuppressReparentFocus()
-            }
-        } else {
-            preserveFocusAfterNonFocusSplit(
-                preferredPanelId: previousFocusedPanelId,
-                splitPanelId: diffPanel.id,
-                previousHostedView: previousHostedView
-            )
-        }
-
-        return diffPanel
     }
 
     /// Tear down all panels in this workspace, freeing their Ghostty surfaces.
