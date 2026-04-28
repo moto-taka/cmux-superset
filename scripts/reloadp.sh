@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+APP_NAME="cmux-superset"
+
 xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux -configuration Release -destination 'platform=macOS' build
-pkill -x cmux || true
+pkill -x "$APP_NAME" || true
 sleep 0.2
 APP_PATH="$(
-  find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Release/cmux.app" -print0 \
+  find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Release/${APP_NAME}.app" -print0 \
   | xargs -0 /usr/bin/stat -f "%m %N" 2>/dev/null \
   | sort -nr \
   | head -n 1 \
   | cut -d' ' -f2-
 )"
 if [[ -z "${APP_PATH}" ]]; then
-  echo "cmux.app not found in DerivedData" >&2
+  echo "${APP_NAME}.app not found in DerivedData" >&2
   exit 1
 fi
 
@@ -23,7 +25,7 @@ echo "  ${APP_PATH}"
 # Don't leak that into cmux, otherwise `git diff` won't page even with PAGER=less.
 env -u GIT_PAGER -u GH_PAGER open -g "$APP_PATH"
 
-APP_PROCESS_PATH="${APP_PATH}/Contents/MacOS/cmux"
+APP_PROCESS_PATH="${APP_PATH}/Contents/MacOS/${APP_NAME}"
 ATTEMPT=0
 MAX_ATTEMPTS=20
 while [[ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]]; do

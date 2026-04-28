@@ -9308,6 +9308,7 @@ struct VerticalTabsSidebar: View {
     @State private var terminalScrollBarVisibilityGeneration: UInt64 = 0
     @State private var laidOutWorkspaceRowIds: Set<UUID> = []
     @State private var pendingSelectedWorkspaceScrollId: UUID?
+    @State private var collapsedRepoGroups: Set<String> = []
     @AppStorage(WorkspacePresentationModeSettings.modeKey)
     private var workspacePresentationMode = WorkspacePresentationModeSettings.defaultMode.rawValue
 
@@ -9586,11 +9587,41 @@ struct VerticalTabsSidebar: View {
     }
 
     private func workspaceRows(renderContext: WorkspaceListRenderContext) -> some View {
+        let sidebarItems = buildSidebarItems(
+            tabs: renderContext.tabs,
+            collapsedRepoGroups: collapsedRepoGroups
+        )
+
         // Workspaces are bounded, so prefer a non-lazy stack here.
         // LazyVStack + drag-state invalidations can recurse through layout.
-        VStack(spacing: tabRowSpacing) {
-            ForEach(renderContext.tabs, id: \.id) { tab in
-                workspaceRow(tab, renderContext: renderContext)
+        return VStack(spacing: tabRowSpacing) {
+            ForEach(sidebarItems) { item in
+                Group {
+                    switch item {
+                    case .repoHeader(let header):
+                        SidebarRepoGroupHeaderView(
+                            repoName: header.repoName,
+                            workspaceCount: header.workspaceCount,
+                            isExpanded: header.isExpanded,
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    if collapsedRepoGroups.contains(header.repoRoot) {
+                                        collapsedRepoGroups.remove(header.repoRoot)
+                                    } else {
+                                        collapsedRepoGroups.insert(header.repoRoot)
+                                    }
+                                }
+                            }
+                        )
+                    case .workspace(let data):
+                        workspaceRow(
+                            data.workspace,
+                            index: data.globalIndex,
+                            isGrouped: data.isGrouped,
+                            renderContext: renderContext
+                        )
+                    }
+                }
             }
         }
         .padding(.vertical, 8)
@@ -9599,9 +9630,10 @@ struct VerticalTabsSidebar: View {
 
     private func workspaceRow(
         _ tab: Workspace,
+        index: Int,
+        isGrouped: Bool,
         renderContext: WorkspaceListRenderContext
     ) -> some View {
-        let index = renderContext.tabIndexById[tab.id] ?? 0
         let usesSelectedContextMenuTargets = selectedTabIds.contains(tab.id)
         let contextMenuWorkspaceIds = usesSelectedContextMenuTargets
             ? renderContext.selectedContextTargetIds
@@ -9670,7 +9702,8 @@ struct VerticalTabsSidebar: View {
             allContextMenuWorkspacesHideTerminalScrollBar: allContextMenuWorkspacesHideTerminalScrollBar,
             settings: renderContext.tabItemSettings,
             livePresentation: livePresentation,
-            frozenPresentation: $frozenTabItemPresentation
+            frozenPresentation: $frozenTabItemPresentation,
+            isGrouped: isGrouped
         )
         .equatable()
         .id(tab.id)
@@ -12205,7 +12238,8 @@ private struct TabItemView: View, Equatable {
         lhs.allRemoteContextMenuTargetsConnecting == rhs.allRemoteContextMenuTargetsConnecting &&
         lhs.allRemoteContextMenuTargetsDisconnected == rhs.allRemoteContextMenuTargetsDisconnected &&
         lhs.allContextMenuWorkspacesHideTerminalScrollBar == rhs.allContextMenuWorkspacesHideTerminalScrollBar &&
-        lhs.settings == rhs.settings
+        lhs.settings == rhs.settings &&
+        lhs.isGrouped == rhs.isGrouped
     }
 
     // Use plain references instead of @EnvironmentObject to avoid subscribing
@@ -12239,6 +12273,7 @@ private struct TabItemView: View, Equatable {
     let settings: SidebarTabItemSettingsSnapshot
     let livePresentation: SidebarTabItemPresentationSnapshot
     @Binding var frozenPresentation: SidebarTabItemPresentationSnapshot?
+    let isGrouped: Bool
     @State private var workspaceSnapshotStorage: SidebarWorkspaceSnapshotBuilder.Snapshot?
     @StateObject private var contextMenuState = SidebarTabItemContextMenuState()
     @State private var isHovering = false
@@ -12752,6 +12787,7 @@ private struct TabItemView: View, Equatable {
                 }
         )
         .padding(.horizontal, 6)
+        .padding(.leading, isGrouped ? 12 : 0)
         .background {
             GeometryReader { proxy in
                 Color.clear

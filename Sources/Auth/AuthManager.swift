@@ -104,12 +104,12 @@ final class AuthManager: ObservableObject {
     static let shared = AuthManager(tokenStore: AuthManager.defaultTokenStore())
 
     private static func defaultTokenStore() -> any StackAuthTokenStoreProtocol {
-        // Release builds include a keychain-access-groups entitlement (via
-        // Resources/cmux.entitlements) and go through the data-protection
-        // keychain. Debug ad-hoc builds can't carry that entitlement
-        // without a provisioning profile, so Keychain writes fail with
-        // errSecMissingEntitlement and the file store takes over. The
-        // wrapper picks per-run based on the first keychain write result.
+        // Distribution builds are signed with release entitlements and go
+        // through the data-protection keychain. Local ad-hoc builds can't
+        // carry those entitlements without a provisioning profile, so
+        // Keychain writes fail with errSecMissingEntitlement and the file
+        // store takes over. The wrapper picks per-run based on the first
+        // keychain write result.
         return FallbackTokenStore(
             primary: KeychainStackTokenStore(),
             fallback: FileStackTokenStore()
