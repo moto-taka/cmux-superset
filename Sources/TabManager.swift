@@ -2188,54 +2188,66 @@ class TabManager: ObservableObject {
 
     /// Create a new workspace backed by a git worktree.
     ///
-    /// This creates a new git worktree branch, then creates a workspace
-    /// whose working directory points to the worktree path.
+    /// `WorktreeManager.createWorktree` runs `git fetch origin <base>` (network) and
+    /// `git worktree add` (disk I/O) synchronously via `Process.waitUntilExit()`.
+    /// Calling that on the main thread blocks the UI for as long as the network/disk
+    /// takes — easily seconds, longer if the remote is slow or unreachable. This
+    /// wrapper hands the heavy git work to a detached Task and only mutates the
+    /// `@MainActor` workspace state once the worktree is on disk.
     ///
     /// - Parameters:
     ///   - repoPath: The root of the git repository to create the worktree in.
     ///   - branchName: The name for the new branch.
     ///   - baseBranch: The branch to base the new worktree on (defaults to the repo's default branch).
     ///   - select: Whether to select the new workspace after creation.
-    /// - Returns: The new workspace, or `nil` if worktree creation failed.
-    @discardableResult
     func addWorktreeWorkspace(
         repoPath: String,
         branchName: String,
         baseBranch: String? = nil,
         select: Bool = true
-    ) -> Workspace? {
+    ) {
         let worktreeManager = WorktreeManager.shared
 
-        let result = worktreeManager.createWorktree(
-            repoPath: repoPath,
-            branchName: branchName,
-            baseBranch: baseBranch
-        )
-
-        switch result {
-        case .success(let worktreePath):
-            let workspace = addWorkspace(
-                workingDirectory: worktreePath,
-                select: select
+        Task.detached(priority: .userInitiated) {
+            let result = worktreeManager.createWorktree(
+                repoPath: repoPath,
+                branchName: branchName,
+                baseBranch: baseBranch
             )
-            workspace.worktreePath = worktreePath
-            workspace.worktreeRepoRoot = repoPath
-            workspace.gitRepoRoot = repoPath
-            // Notify sidebar to re-evaluate repo grouping since gitRepoRoot
-            // was set after addWorkspace() already published the tabs change.
-            objectWillChange.send()
-            // Set initial title to branch name without using customTitle,
-            // so that applyProcessTitle() can still detect Claude/Codex.
-            workspace.applyProcessTitle(branchName)
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                switch result {
+                case .success(let worktreePath):
+                    let workspace = self.addWorkspace(
+                        workingDirectory: worktreePath,
+                        select: select
+                    )
+                    workspace.worktreePath = worktreePath
+                    workspace.worktreeRepoRoot = repoPath
+                    workspace.gitRepoRoot = repoPath
+                    // Notify sidebar to re-evaluate repo grouping since gitRepoRoot
+                    // was set after addWorkspace() already published the tabs change.
+                    self.objectWillChange.send()
+                    // Set initial title to branch name without using customTitle,
+                    // so that applyProcessTitle() can still detect Claude/Codex.
+                    workspace.applyProcessTitle(branchName)
 #if DEBUG
-            cmuxDebugLog("worktree.created branch=\(branchName) path=\(worktreePath)")
+                    cmuxDebugLog("worktree.created branch=\(branchName) path=\(worktreePath)")
 #endif
-            return workspace
-        case .failure(let error):
+                case .failure(let error):
 #if DEBUG
-            cmuxDebugLog("worktree.createFailed error=\(error.localizedDescription)")
+                    cmuxDebugLog("worktree.createFailed error=\(error.localizedDescription)")
 #endif
-            return nil
+                    let alert = NSAlert()
+                    alert.messageText = String(
+                        localized: "worktree.error.title",
+                        defaultValue: "Couldn't create worktree"
+                    )
+                    alert.informativeText = error.localizedDescription
+                    alert.runModal()
+                }
+            }
         }
     }
 

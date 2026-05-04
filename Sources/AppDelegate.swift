@@ -5870,14 +5870,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         workingDirectory: String,
         debugSource: String
     ) {
-        if addWorkspaceInPreferredMainWindow(
-            workingDirectory: workingDirectory,
-            shouldBringToFront: true,
-            debugSource: debugSource
-        ) != nil {
-            return
+        // Probe the directory off-main with a hard timeout before handing it to
+        // workspace creation. Stale NFS / disconnected SMB mounts can make
+        // `chdir(2)` (which Ghostty's surface bootstrap performs when spawning
+        // the shell) hang indefinitely on the main thread, presenting as a full
+        // app freeze. A best-effort accessibility check here surfaces the issue
+        // as a dismissable alert instead.
+        Self.checkFolderReachable(path: workingDirectory) { [weak self] reachable in
+            guard let self else { return }
+            guard reachable else {
+                let alert = NSAlert()
+                alert.messageText = String(
+                    localized: "openFolder.unreachable.title",
+                    defaultValue: "Couldn't open folder"
+                )
+                alert.informativeText = String(
+                    localized: "openFolder.unreachable.message",
+                    defaultValue: "The folder isn't responding. It may be on a disconnected network mount, or no longer exist."
+                )
+                alert.runModal()
+                return
+            }
+            if self.addWorkspaceInPreferredMainWindow(
+                workingDirectory: workingDirectory,
+                shouldBringToFront: true,
+                debugSource: debugSource
+            ) != nil {
+                return
+            }
+            _ = self.createMainWindow(initialWorkingDirectory: workingDirectory)
         }
-        _ = createMainWindow(initialWorkingDirectory: workingDirectory)
+    }
+
+    /// Best-effort accessibility probe with a hard timeout.
+    ///
+    /// Runs `FileManager.fileExists(atPath:isDirectory:)` on a detached
+    /// background thread and waits up to `timeout` seconds for the result. If
+    /// the syscall hangs (typically because the path lives on a stuck network
+    /// mount), the wait expires, the helper returns `false`, and the worker
+    /// thread leaks until the OS unblocks it — but the main thread stays
+    /// responsive, which is what callers need. The result is only read after
+    /// `semaphore.wait` succeeds, so signal/wait acts as the happens-before
+    /// barrier and no additional locking is needed.
+    static func checkFolderReachable(
+        path: String,
+        timeout: TimeInterval = 3.0,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        final class ReachabilityBox: @unchecked Sendable {
+            var reachable: Bool = false
+        }
+        let box = ReachabilityBox()
+        let semaphore = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+            box.reachable = exists && isDir.boolValue
+            semaphore.signal()
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let waitOutcome = semaphore.wait(timeout: .now() + timeout)
+            let reachable = waitOutcome == .success && box.reachable
+            Task { @MainActor in
+                completion(reachable)
+            }
+        }
     }
 
     @discardableResult

@@ -3566,7 +3566,24 @@ struct ContentView: View {
                     )
                 },
                 onOpenFolder: { path in
-                    tabManager.addWorkspace(workingDirectory: path)
+                    // Probe the directory off-main first; a stuck mount can otherwise
+                    // hang Ghostty's shell-spawn `chdir(2)` and freeze the whole app.
+                    AppDelegate.checkFolderReachable(path: path) { reachable in
+                        guard reachable else {
+                            let alert = NSAlert()
+                            alert.messageText = String(
+                                localized: "openFolder.unreachable.title",
+                                defaultValue: "Couldn't open folder"
+                            )
+                            alert.informativeText = String(
+                                localized: "openFolder.unreachable.message",
+                                defaultValue: "The folder isn't responding. It may be on a disconnected network mount, or no longer exist."
+                            )
+                            alert.runModal()
+                            return
+                        }
+                        tabManager.addWorkspace(workingDirectory: path)
+                    }
                 }
             )
         })

@@ -93922,6 +93922,57 @@
         }
       }
     },
+    "worktree.error.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't create worktree"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "worktree を作成できませんでした"
+          }
+        }
+      }
+    },
+    "openFolder.unreachable.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't open folder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダを開けませんでした"
+          }
+        }
+      }
+    },
+    "openFolder.unreachable.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder isn't responding. It may be on a disconnected network mount, or no longer exist."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダが応答しません。切断されたネットワークマウント上にあるか、存在しない可能性があります。"
+          }
+        }
+      }
+    },
     "worktree.mode.regular": {
       "extractionState": "manual",
       "localizations": {

@@ -186,7 +186,20 @@ struct WorktreeCreationView: View {
         panel.title = String(localized: "worktree.browse.title", defaultValue: "Select Repository")
         panel.prompt = String(localized: "worktree.browse.prompt", defaultValue: "Select")
 
-        if panel.runModal() == .OK, let url = panel.url {
+        // Present as a child sheet of the WorktreeCreationView's host window.
+        // Calling `panel.runModal()` from inside a SwiftUI `.sheet { }` action
+        // creates a nested AppKit modal session on top of the SwiftUI modal,
+        // which makes the panel's key-window state unreliable: clicks get
+        // swallowed and navigation appears broken. `beginSheetModal(for:)`
+        // attaches the panel as a sheet of the active window so AppKit can
+        // route mouse/keyboard events properly.
+        if let parent = NSApp.keyWindow {
+            panel.beginSheetModal(for: parent) { response in
+                if response == .OK, let url = panel.url {
+                    repoPath = url.path
+                }
+            }
+        } else if panel.runModal() == .OK, let url = panel.url {
             repoPath = url.path
         }
     }
